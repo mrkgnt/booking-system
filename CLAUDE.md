@@ -205,11 +205,17 @@ detail: see `PROJECT_CONTEXT.md`.
       service_role key) and run `npm run dev --workspace=apps/api` +
       `curl localhost:8787/_smoke/business-profile -H "X-Tenant-Slug:
       dentdi"` locally (outside this sandbox) to complete that check.
+- [x] **TypeScript types generated from the live schema**
+      (`apps/api/src/lib/database.types.ts`, via Supabase MCP
+      `generate_typescript_types` against the live Dent Di project — no
+      local `supabase` CLI needed). `getServiceRoleClient`/`getAnonClient`
+      in `src/lib/supabase.ts` are now typed `SupabaseClient<Database>`,
+      so every query is checked against real table/column names. Marked
+      GENERATED/do-not-hand-edit; regenerate after any schema change by
+      re-running the same MCP call.
 - [ ] **Next:** implement and curl/Postman-test booking creation
       (server-side availability calc + idempotency + double opt-in). No
       UI until solid.
-- [ ] Generate TypeScript types from the live schema for the Hono API
-      (`supabase gen types typescript` or MCP equivalent) — not done yet.
 - [ ] Wire up automated DB tests (vitest + supabase-js) once the Hono API
       project exists with real env-based Supabase credentials — today's
       `db/tests/schema_tests.sql` is the manually-run equivalent. The
