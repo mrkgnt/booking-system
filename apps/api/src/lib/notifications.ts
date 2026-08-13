@@ -35,3 +35,39 @@ export async function sendVerificationLink(
   // via a dev-only response field.
   return { status: "failed", error: "no provider configured — dev stub, see server log" };
 }
+
+export type SendManagementLinksParams = {
+  channel: "email" | "sms";
+  to: string;
+  cancelUrl: string;
+  rescheduleUrl: string;
+  locale: string;
+};
+
+export type SendManagementLinksResult = {
+  cancel: SendVerificationLinkResult;
+  reschedule: SendVerificationLinkResult;
+};
+
+// Sent once a booking is confirmed — same stub approach as
+// sendVerificationLink (log server-side, return the honest 'failed'
+// no-provider state). Kept separate from sendVerificationLink rather than
+// generalizing that function's params, since its "confirmUrl" naming/single
+// link is specific to the double opt-in step and already has callers/tests.
+export async function sendManagementLinks(
+  params: SendManagementLinksParams,
+): Promise<SendManagementLinksResult> {
+  const cancel = await sendVerificationLink({
+    channel: params.channel,
+    to: params.to,
+    confirmUrl: params.cancelUrl,
+    locale: params.locale,
+  });
+  const reschedule = await sendVerificationLink({
+    channel: params.channel,
+    to: params.to,
+    confirmUrl: params.rescheduleUrl,
+    locale: params.locale,
+  });
+  return { cancel, reschedule };
+}

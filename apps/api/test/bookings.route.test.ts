@@ -109,3 +109,85 @@ describe("POST /bookings/confirm — validation and tenant resolution", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("POST /bookings/cancel — validation and tenant resolution", () => {
+  beforeEach(() => {
+    resetRateLimitBuckets();
+  });
+
+  it("400s with no X-Tenant-Slug header", async () => {
+    const res = await app.request("/bookings/cancel", { method: "POST", body: "{}" });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "X-Tenant-Slug header is required" });
+  });
+
+  it("404s for an unknown tenant slug", async () => {
+    const res = await app.request("/bookings/cancel", {
+      method: "POST",
+      headers: { "X-Tenant-Slug": "nonexistent", "Content-Type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("400s on a missing token", async () => {
+    const res = await app.request("/bookings/cancel", {
+      method: "POST",
+      headers: { "X-Tenant-Slug": "dentdi", "Content-Type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("validation_error");
+  });
+
+  it("400s on a too-short token", async () => {
+    const res = await app.request("/bookings/cancel", {
+      method: "POST",
+      headers: { "X-Tenant-Slug": "dentdi", "Content-Type": "application/json" },
+      body: JSON.stringify({ token: "short" }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /bookings/reschedule — validation and tenant resolution", () => {
+  beforeEach(() => {
+    resetRateLimitBuckets();
+  });
+
+  it("400s with no X-Tenant-Slug header", async () => {
+    const res = await app.request("/bookings/reschedule", { method: "POST", body: "{}" });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "X-Tenant-Slug header is required" });
+  });
+
+  it("404s for an unknown tenant slug", async () => {
+    const res = await app.request("/bookings/reschedule", {
+      method: "POST",
+      headers: { "X-Tenant-Slug": "nonexistent", "Content-Type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("400s on a missing token", async () => {
+    const res = await app.request("/bookings/reschedule", {
+      method: "POST",
+      headers: { "X-Tenant-Slug": "dentdi", "Content-Type": "application/json" },
+      body: JSON.stringify({ newStartsAt: "2027-03-01T10:00:00.000Z" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("validation_error");
+  });
+
+  it("400s on a malformed newStartsAt", async () => {
+    const res = await app.request("/bookings/reschedule", {
+      method: "POST",
+      headers: { "X-Tenant-Slug": "dentdi", "Content-Type": "application/json" },
+      body: JSON.stringify({ token: "a-valid-length-token", newStartsAt: "not-a-date" }),
+    });
+    expect(res.status).toBe(400);
+  });
+});

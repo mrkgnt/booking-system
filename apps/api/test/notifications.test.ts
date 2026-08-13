@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { sendVerificationLink } from "../src/lib/notifications.js";
+import { sendManagementLinks, sendVerificationLink } from "../src/lib/notifications.js";
 
 describe("sendVerificationLink (stub)", () => {
   it("returns an honest 'failed: no provider configured' result", async () => {
@@ -23,5 +23,46 @@ describe("sendVerificationLink (stub)", () => {
     });
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("https://example.com/confirm?token=xyz"));
     logSpy.mockRestore();
+  });
+});
+
+describe("sendManagementLinks (stub)", () => {
+  it("logs both the cancel and reschedule links and returns honest failed results for each", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const result = await sendManagementLinks({
+      channel: "email",
+      to: "patient@example.com",
+      cancelUrl: "https://example.com/bookings/cancel?token=abc",
+      rescheduleUrl: "https://example.com/bookings/reschedule?token=def",
+      locale: "en",
+    });
+
+    expect(result.cancel.status).toBe("failed");
+    expect(result.cancel.error).toMatch(/no provider configured/);
+    expect(result.reschedule.status).toBe("failed");
+    expect(result.reschedule.error).toMatch(/no provider configured/);
+
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("https://example.com/bookings/cancel?token=abc"),
+    );
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("https://example.com/bookings/reschedule?token=def"),
+    );
+    logSpy.mockRestore();
+  });
+
+  it("makes no network calls (pure console logging)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    await sendManagementLinks({
+      channel: "sms",
+      to: "+37120000000",
+      cancelUrl: "https://example.com/bookings/cancel?token=abc",
+      rescheduleUrl: "https://example.com/bookings/reschedule?token=def",
+      locale: "lv",
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 });
