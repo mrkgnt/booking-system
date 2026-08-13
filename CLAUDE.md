@@ -60,19 +60,39 @@ detail: see `PROJECT_CONTEXT.md`.
 ## Current Build Stage
 
 - [x] Multi-tenant vs. per-tenant architecture decided
-- [x] `db/tenant-schema.sql` designed and finalized (not yet applied to any
-      real Supabase project)
+- [x] `db/tenant-schema.sql` designed and finalized
 - [x] Repo scaffolding: `.gitignore`, `CLAUDE.md`, `PROJECT_CONTEXT.md`
-- [ ] **Not yet done:** actually running the Supabase CLI setup sequence
-      against a real project (`supabase init` → migration from
-      `tenant-schema.sql` → local Docker stack → real remote project in an
-      **EU region** → `supabase link` → `supabase db push` → generate
-      TS types)
+- [x] **Dent Di's real Supabase project provisioned and schema applied**
+      (via Supabase MCP, not the CLI sequence originally planned — see
+      note below). Project ref `eafeskigfcinnwahjiyx`, region `eu-west-1`
+      (Ireland, EU — satisfies GDPR residency), Postgres 17. Dashboard
+      still shows the project name as "Dent Di back office" — cosmetic
+      only, rename via Project Settings → General whenever convenient.
+      `business_profile` seeded: slug `dentdi`, default_locale `lv`,
+      supported_locales `{lv,ru,en}`, timezone `Europe/Riga`, currency
+      `EUR`, status `onboarding`. `roles` seeded with `owner`/`staff`.
+      All 18 tables created with RLS enabled; `set_updated_at` and
+      `is_active_member` hardened with explicit `search_path`; anon RPC
+      access to `is_active_member()` revoked (authenticated access kept —
+      required for RLS policy evaluation).
+      Project pre-existed with 3 unrelated prototype tables
+      (`working_hours`, `blackout_dates`, `appointment_requests`, no real
+      data) — dropped before applying the real schema, per explicit
+      instruction.
 - [ ] **Next:** scaffold the Hono API project — tenant-aware from day one
 - [ ] Faker-based TypeScript seed script (services, staff, patients,
       bookings across LV/RU/EN, past/future dates)
 - [ ] Implement and curl/Postman-test booking creation (server-side
       availability calc + idempotency + double opt-in). No UI until solid.
+- [ ] Generate TypeScript types from the live schema for the Hono API
+      (`supabase gen types typescript` or MCP equivalent) — not done yet.
+
+Note: schema was applied directly via the Supabase MCP server
+(`apply_migration`) against the live project, not through the originally
+planned local CLI flow (`supabase init` → local Docker stack → `db push`).
+No local `supabase/migrations` directory exists yet in this repo — if we
+want migration history tracked in-repo going forward (recommended before
+client #2), that's still open.
 
 ## Decisions Log (running — append, don't rewrite history)
 
