@@ -15,6 +15,24 @@ const envSchema = z.object({
   DENTDI_SUPABASE_URL: z.string().url(),
   DENTDI_SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   DENTDI_SUPABASE_ANON_KEY: z.string().min(1),
+
+  // Bot protection (Cloudflare Turnstile) — disabled by default since no
+  // site key exists yet. When enabled without a secret key, booking
+  // creation intentionally fails closed rather than silently skipping
+  // verification (see routes/bookings.ts).
+  TURNSTILE_ENABLED: z.coerce.boolean().default(false),
+  TURNSTILE_SECRET_KEY: z.string().optional(),
+
+  // In-memory rate limiting on booking-creation endpoints. Explicitly
+  // insufficient once deployed to serverless/multi-instance (no shared
+  // memory across invocations) — real fix is Cloudflare rate rules or
+  // Upstash Redis, deferred until hosting is decided (see CLAUDE.md).
+  RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
+
+  // Booking-creation tunables.
+  MIN_BOOKING_LEAD_MINUTES: z.coerce.number().int().nonnegative().default(60),
+  VERIFICATION_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(30),
 });
 
 export type Env = z.infer<typeof envSchema>;

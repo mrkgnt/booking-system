@@ -205,11 +205,90 @@ detail: see `PROJECT_CONTEXT.md`.
       service_role key) and run `npm run dev --workspace=apps/api` +
       `curl localhost:8787/_smoke/business-profile -H "X-Tenant-Slug:
       dentdi"` locally (outside this sandbox) to complete that check.
-- [ ] **Next:** implement and curl/Postman-test booking creation
-      (server-side availability calc + idempotency + double opt-in). No
-      UI until solid.
-- [ ] Generate TypeScript types from the live schema for the Hono API
-      (`supabase gen types typescript` or MCP equivalent) — not done yet.
+- [x] **TypeScript types generated from the live schema**
+      (`apps/api/src/lib/database.types.ts`, via Supabase MCP
+      `generate_typescript_types` against the live Dent Di project — no
+      local `supabase` CLI needed). `getServiceRoleClient`/`getAnonClient`
+      in `src/lib/supabase.ts` are now typed `SupabaseClient<Database>`,
+      so every query is checked against real table/column names. Marked
+      GENERATED/do-not-hand-edit; regenerate after any schema change by
+      re-running the same MCP call.
+- [x] **Booking creation implemented: `GET /availability`, `POST /bookings`,
+      `POST /bookings/confirm`.** Server-side availability calc
+      (`src/lib/availability.ts`, pure function — resolves staff-specific
+      vs. business-wide hours, closures incl. recurring-yearly wraparound,
+      buffer-aware conflict detection against existing bookings, minimum
+      lead time; `src/lib/timezone.ts` converts tenant-local wall-clock
+      times to UTC via the built-in Intl API, no extra dependency — noted
+      as a documented approximation right at DST-transition seconds, fine
+      at 15-minute slot granularity). Idempotency: client-supplied
+      `idempotencyKey`, checked before insert and again via `23505` catch
+      on the DB unique constraint (race-safe, returns the existing
+      booking with 200 either way). Patient find-or-create
+      (`src/lib/patient-matching.ts`, pure selection logic): matches on
+      exact email OR phone, most-recently-created wins on ambiguous
+      multi-match — accepted MVP heuristic debt, no unique constraint
+      exists on either column. Double opt-in: signed token
+      (`src/lib/tokens.ts`, sha256 hash stored, raw token only in the
+      outbound link, 30min TTL) via `booking_verification_tokens`.
+      **Double-booking race fixed for real** (not just logged as a
+      follow-up): `bookings_no_overlap` Postgres exclusion constraint
+      (`extensions.btree_gist`, generated `starts_at_range` column) applied
+      live to the Dent Di project and baked into `db/tenant-schema.sql`
+      for future clients — one pre-existing overlapping pair in seed data
+      resolved (cancelled) before the constraint could be added. The
+      constraint only knows literal time-range overlap, not per-service
+      buffers, so `hasBufferConflict()` (shared between availability calc
+      and the pre-insert re-check) is what actually enforces buffer gaps;
+      the DB constraint is the backstop for the exact-overlap race
+      specifically. New schema test (`db/tests/schema_tests.sql` #17,
+      17/17 passing) verifies the constraint blocks genuine overlaps
+      while allowing back-to-back adjacent slots.
+      **Notification delivery: stubbed, per explicit decision** — no
+      email/SMS provider is chosen yet (SMS is still an open Decisions Log
+      item; email isn't even named). `src/lib/notifications.ts` logs the
+      confirm link server-side; `POST /bookings`'s response includes
+      `_dev_confirm_url` only when `NODE_ENV !== "production"` (hard env
+      check, not just "don't populate it" — a misconfigured NODE_ENV
+      leaking tokens over HTTP would be a real vulnerability, not just
+      plan hygiene). `notification_log.status` written honestly as
+      `pending`/`failed: no provider configured`, never a forged `sent`.
+      **Rate limiting + bot protection: env-gated stubs, not silently
+      skipped.** `src/middleware/rate-limit.ts` — in-memory fixed-window
+      per IP, 5 attempts/15min default; explicitly commented as
+      insufficient once deployed to serverless/multi-instance (no shared
+      memory across invocations) — real fix is Cloudflare rate rules or
+      Upstash Redis, blocked on the still-open hosting decision.
+      `src/lib/turnstile.ts` — `TURNSTILE_ENABLED` defaults false (no
+      Cloudflare site key exists yet) so local/curl testing is never
+      blocked; when enabled without a secret key, fails closed rather than
+      silently allowing everything.
+      **Testing:** 50/50 vitest tests passing — full table-driven coverage
+      of `computeAvailableSlots` (hours precedence, closures incl.
+      wraparound, buffer collisions, multi-staff merging, lead-time
+      filtering), patient-matching, Postgres-error classification, tokens,
+      the notification/Turnstile stubs, rate-limit middleware, and
+      route-shape/validation/tenant-resolution tests (fail before any DB
+      call, so provable without live credentials). `npx tsc --noEmit`
+      clean throughout.
+      **Verified live via curl:** `/health`, all validation/tenant-missing/
+      tenant-unknown 400/404 paths on `/availability`, `/bookings`, and
+      `/bookings/confirm`. **Not verified live:** the actual DB-touching
+      path (real availability query, booking insert, confirm) — same
+      sandbox network restriction documented against `/_smoke` still
+      applies (direct outbound requests to `*.supabase.co` blocked by this
+      session's egress proxy, independent of whether the service-role key
+      is real or a placeholder). Re-confirmed by re-hitting `/_smoke`
+      during this pass: identical "Host not in allowlist" error. Full
+      end-to-end curl flow (`GET /availability` → `POST /bookings` → grab
+      `_dev_confirm_url` → `POST /bookings/confirm`) needs to be run
+      locally, outside this sandbox, once the real
+      `DENTDI_SUPABASE_SERVICE_ROLE_KEY` is filled in.
+      **Deliberately not built this pass:** `POST /bookings/cancel`/
+      reschedule (token `purpose` already supports both, schema needs no
+      further changes), admin-side booking management (needs auth
+      middleware that doesn't exist yet), reminder notifications (blocked
+      on the provider decision above).
 - [ ] Wire up automated DB tests (vitest + supabase-js) once the Hono API
       project exists with real env-based Supabase credentials — today's
       `db/tests/schema_tests.sql` is the manually-run equivalent. The
@@ -247,6 +326,9 @@ client #2), that's still open.
 | Monorepo layout | npm workspaces; root converted (`"workspaces": ["apps/*"]`); `apps/api` added for Hono. `db/` stays at repo root for now — deliberate half-step, not permanent; revisit if it starts feeling inconsistent once `apps/site` (Astro) exists too |
 | Hono local dev | `@hono/node-server` + `tsx watch` for local dev; no `wrangler.toml`/Vercel config yet — keeps the Backend hosting decision above genuinely open, since Hono's runtime-agnostic adapter pattern makes adding either later a small additive file, not a rewrite |
 | Tenant resolution (interim) | Header-based (`X-Tenant-Slug`) + in-memory env-var-driven registry map (`resolveTenant(slug)` in `apps/api/src/config/tenant-registry.ts`), not DB-backed. Fine for 1–3 clients; should get replaced by a real registry around the same time client #2 forces the migration-runner question (see note below the build-stage checklist) |
+| Double-booking prevention | Fixed for real via a Postgres exclusion constraint (`bookings_no_overlap`, `extensions.btree_gist`), not just logged as a follow-up — applied live and baked into `db/tenant-schema.sql`. App-level `hasBufferConflict()` re-check still needed since the DB constraint isn't buffer-aware. |
+| Double opt-in delivery | Stubbed (log confirm link server-side + dev-only `_dev_confirm_url` response field, `notification_log` marked honestly as `pending`/`failed`) rather than wiring a real email/SMS vendor now — no provider is chosen yet and picking one shouldn't block proving the booking logic itself. Swapping in a real provider later only touches `src/lib/notifications.ts`. |
+| Rate limiting / bot protection (interim) | In-memory rate limiter + env-gated Turnstile stub (disabled by default, fails closed if enabled without a secret key) — real requirements from PROJECT_CONTEXT.md, built structurally correct now rather than skipped, but explicitly insufficient once actually deployed (no shared memory across serverless instances; no Cloudflare site key exists yet). |
 
 ## Open / Non-Blocking Items
 
@@ -262,6 +344,22 @@ client #2), that's still open.
   volume/scraping on the now-public services/staff/hours endpoints. Not
   an authorization gap (RLS/GRANTs are correctly scoped), purely a
   volume-control item.
+- Email/SMS provider choice for real double opt-in delivery (currently
+  stubbed — see Decisions Log) — needed before any real patient can
+  actually receive a confirmation link.
+- Cloudflare Turnstile site key — bot protection on booking creation is
+  wired but disabled (`TURNSTILE_ENABLED=false`) until one exists.
+- Real rate-limiting infra (Cloudflare rate rules or Upstash Redis) once
+  hosting is decided — the current in-memory limiter doesn't hold up
+  across serverless instances.
+- End-to-end curl verification of the actual booking-creation DB path
+  (`GET /availability` → `POST /bookings` → `POST /bookings/confirm`)
+  needs to run locally with the real `DENTDI_SUPABASE_SERVICE_ROLE_KEY` —
+  blocked in this sandbox by the same network egress restriction
+  documented against `/_smoke`.
+- `POST /bookings/cancel`/reschedule and admin-side booking management
+  (list/force-book/staff-cancel) are deferred — schema already supports
+  both, no migration needed when they're built.
 
 ## Working Agreement
 
