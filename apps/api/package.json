@@ -1,0 +1,25 @@
+{
+  "name": "@booking-system/api",
+  "private": true,
+  "type": "module",
+  "description": "Hono API — tenant-aware backend. Holds the tenant registry and routes each request to the correct client's Supabase project. Runtime-agnostic (no hosting-specific code yet — see CLAUDE.md).",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "hono": "^4.6.9",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.13.5",
+    "@types/node": "^22.9.0",
+    "dotenv": "^16.4.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.10"
+  }
+}
