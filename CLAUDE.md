@@ -158,14 +158,63 @@ detail: see `PROJECT_CONTEXT.md`.
       from the start rather than needing the same live patching.
 - [x] **Hono API catalog-read-access decision made** (see above) — no
       longer blocking Hono scaffolding.
-- [ ] **Next:** scaffold the Hono API project — tenant-aware from day one.
-- [ ] Implement and curl/Postman-test booking creation (server-side
-      availability calc + idempotency + double opt-in). No UI until solid.
+- [x] **Hono API scaffolded at `apps/api`** — repo root converted to an npm
+      workspaces root (`"workspaces": ["apps/*"]`); `db/` stays at the repo
+      root for now (deliberate half-step, not permanent — see Decisions
+      Log). Built: `src/config/env.ts` (zod-validated env accessor, fails
+      fast on missing vars), `src/config/tenant-registry.ts` (in-memory,
+      env-var-driven `resolveTenant(slug)` — one entry today, `dentdi`),
+      `src/lib/supabase.ts` (`getServiceRoleClient(tenant)` /
+      `getAnonClient(tenant)`, both take a `TenantConfig` explicitly so no
+      code path can use the wrong tenant's key), `src/middleware/tenant.ts`
+      (resolves tenant from an `X-Tenant-Slug` header — interim, not
+      hostname-based yet, no second real domain to test that against),
+      `GET /health`, and a scaffold-only `GET /_smoke/business-profile`
+      (prod-gated via `NODE_ENV`, proves the full header → tenant →
+      service-role Supabase client → real query path end-to-end,
+      read-only, no booking logic). Runtime-agnostic: `src/app.ts` exports
+      a plain `Hono` instance, `src/index.ts` wraps it with
+      `@hono/node-server` for local dev only — no `wrangler.toml`/Vercel
+      config yet, keeps the Backend hosting decision genuinely open.
+      Deliberately **not** built this pass: booking creation, availability
+      calc, auth/admin middleware, any catalog-listing proxy endpoint
+      (unnecessary — anon already reads the catalog directly, see above).
+      Resolved dependency versions: `hono@4.13.1`, `@supabase/supabase-js@
+      2.112.3`, `zod@3.25.76`, `@hono/node-server@1.19.17`, `dotenv@
+      16.6.1`, `vitest@4.1.10` (bumped from an initially-pinned `^2.1.4`
+      after `npm audit` flagged vulnerable transitive `vite`/`esbuild`
+      deps in that range — dev-only risk, but fixed since this is a fresh
+      scaffold), `tsx@4.23.12`, `typescript@5.9.3` (kept on the 5.x line
+      deliberately — `typescript@7` and `zod@4` are available upstream but
+      are unverified major-version jumps from what's well-understood;
+      revisit in a dedicated dependency-upgrade pass later, not bundled
+      into this scaffold).
+      **Verification:** `npm install`, `npx tsc --noEmit -p apps/api/tsconfig.json`
+      (clean), `npm run test --workspace=apps/api` (1/1 passing),
+      `/health` returns `200 {"status":"ok",...}`, `/_smoke/business-profile`
+      correctly returns `400` with no `X-Tenant-Slug` header and `404` for
+      an unknown slug. **Not verified live:** the `dentdi` positive-path
+      smoke check — this sandboxed session's network egress proxy blocks
+      direct outbound requests to `*.supabase.co` project REST hosts
+      ("Host not in allowlist"), separate from the Supabase MCP tool's own
+      access path, and the service-role secret key itself isn't obtainable
+      via MCP by design (only anon/publishable keys are exposed). `.env`
+      has the real project URL and anon key filled in (fetched via MCP)
+      but a placeholder for `DENTDI_SUPABASE_SERVICE_ROLE_KEY` — fill in
+      the real value (Supabase dashboard → Project Settings → API →
+      service_role key) and run `npm run dev --workspace=apps/api` +
+      `curl localhost:8787/_smoke/business-profile -H "X-Tenant-Slug:
+      dentdi"` locally (outside this sandbox) to complete that check.
+- [ ] **Next:** implement and curl/Postman-test booking creation
+      (server-side availability calc + idempotency + double opt-in). No
+      UI until solid.
 - [ ] Generate TypeScript types from the live schema for the Hono API
       (`supabase gen types typescript` or MCP equivalent) — not done yet.
 - [ ] Wire up automated DB tests (vitest + supabase-js) once the Hono API
       project exists with real env-based Supabase credentials — today's
-      `db/tests/schema_tests.sql` is the manually-run equivalent.
+      `db/tests/schema_tests.sql` is the manually-run equivalent. The
+      `apps/api` vitest scaffold (`vitest.config.ts`, `test/setup.ts`,
+      `test/health.test.ts`) is the starting point for this.
 
 Note: schema was applied directly via the Supabase MCP server
 (`apply_migration`) against the live project, not through the originally
@@ -195,6 +244,9 @@ client #2), that's still open.
 | Backend hosting | **Open** — Cloudflare Workers vs. Vercel not yet decided |
 | SMS provider | **Open** — not yet chosen (Twilio vs. EU-based alternative) |
 | Public catalog reads | Direct via Supabase REST with anon key (scoped GRANT+RLS on services/service_categories/staff/business_hours/translations only), not proxied through Hono — nothing in the catalog is sensitive, so the extra hop bought no security. No client-side "identification token" — anything shipped in browser JS is public and can't function as a secret. |
+| Monorepo layout | npm workspaces; root converted (`"workspaces": ["apps/*"]`); `apps/api` added for Hono. `db/` stays at repo root for now — deliberate half-step, not permanent; revisit if it starts feeling inconsistent once `apps/site` (Astro) exists too |
+| Hono local dev | `@hono/node-server` + `tsx watch` for local dev; no `wrangler.toml`/Vercel config yet — keeps the Backend hosting decision above genuinely open, since Hono's runtime-agnostic adapter pattern makes adding either later a small additive file, not a rewrite |
+| Tenant resolution (interim) | Header-based (`X-Tenant-Slug`) + in-memory env-var-driven registry map (`resolveTenant(slug)` in `apps/api/src/config/tenant-registry.ts`), not DB-backed. Fine for 1–3 clients; should get replaced by a real registry around the same time client #2 forces the migration-runner question (see note below the build-stage checklist) |
 
 ## Open / Non-Blocking Items
 
