@@ -285,10 +285,41 @@ detail: see `PROJECT_CONTEXT.md`.
       locally, outside this sandbox, once the real
       `DENTDI_SUPABASE_SERVICE_ROLE_KEY` is filled in.
       **Deliberately not built this pass:** `POST /bookings/cancel`/
-      reschedule (token `purpose` already supports both, schema needs no
-      further changes), admin-side booking management (needs auth
-      middleware that doesn't exist yet), reminder notifications (blocked
-      on the provider decision above).
+      reschedule (built in the next pass — see below), admin-side booking
+      management (needs auth middleware that doesn't exist yet), reminder
+      notifications (blocked on the provider decision above).
+- [x] **`POST /bookings/cancel` and `POST /bookings/reschedule`
+      implemented.** No schema migration needed — `purpose` already
+      included `'cancel'`/`'reschedule'`. **Capability-token model**
+      (documented in the Decisions Log): unlike the `confirm` token, these
+      are not single-use (no `used_at` gating) — validity comes from
+      `expires_at = booking.starts_at` plus the booking's own `status`
+      (finalized statuses `cancelled`/`completed`/`no_show` reject the
+      action with `already_finalized`; a past `starts_at` rejects with
+      `appointment_already_passed`). Both tokens are issued together at
+      `POST /bookings/confirm` time (not at creation — a
+      `pending_verification` booking isn't real yet), surfaced via
+      `_dev_cancel_url`/`_dev_reschedule_url` outside production, and
+      logged via a new `sendManagementLinks()` stub in
+      `src/lib/notifications.ts` (additive — `sendVerificationLink()`
+      untouched). `POST /bookings/cancel` sets `status: 'cancelled'`,
+      `cancelled_at`, and leaves `cancelled_by: null` (patient-initiated,
+      not a staff action — no `audit_log` write, that table is scoped to
+      staff manual overrides per `PROJECT_CONTEXT.md`). `POST
+      /bookings/reschedule` re-runs the same `MIN_BOOKING_LEAD_MINUTES`
+      and buffer-aware conflict check (`hasExistingConflict`, now with an
+      `excludeBookingId` param so the booking doesn't conflict with
+      itself) used at creation time, then **refreshes** (doesn't reissue)
+      both tokens' `expires_at` to the new `starts_at` — a reschedule
+      keeps the same capability tokens alive through to the new
+      appointment rather than invalidating and re-sending new links.
+      **Testing:** 60/60 vitest tests passing (10 new: `sendManagementLinks`
+      stub behavior + no-network-call proof, route-level validation/
+      tenant-resolution shape for both new endpoints). `npx tsc --noEmit`
+      clean. **Not verified live** — same sandbox network restriction as
+      the rest of the booking flow; the full cancel/reschedule curl
+      sequence (documented in the PR) needs to run locally with the real
+      service-role key.
 - [ ] Wire up automated DB tests (vitest + supabase-js) once the Hono API
       project exists with real env-based Supabase credentials — today's
       `db/tests/schema_tests.sql` is the manually-run equivalent. The
@@ -329,6 +360,7 @@ client #2), that's still open.
 | Double-booking prevention | Fixed for real via a Postgres exclusion constraint (`bookings_no_overlap`, `extensions.btree_gist`), not just logged as a follow-up — applied live and baked into `db/tenant-schema.sql`. App-level `hasBufferConflict()` re-check still needed since the DB constraint isn't buffer-aware. |
 | Double opt-in delivery | Stubbed (log confirm link server-side + dev-only `_dev_confirm_url` response field, `notification_log` marked honestly as `pending`/`failed`) rather than wiring a real email/SMS vendor now — no provider is chosen yet and picking one shouldn't block proving the booking logic itself. Swapping in a real provider later only touches `src/lib/notifications.ts`. |
 | Rate limiting / bot protection (interim) | In-memory rate limiter + env-gated Turnstile stub (disabled by default, fails closed if enabled without a secret key) — real requirements from PROJECT_CONTEXT.md, built structurally correct now rather than skipped, but explicitly insufficient once actually deployed (no shared memory across serverless instances; no Cloudflare site key exists yet). |
+| Cancel/reschedule token model | Capability tokens, not single-use — valid until `booking.starts_at` passes or `status` becomes finalized, not gated by `used_at`. Simpler than reissuing tokens per action and correctly allows repeat reschedules. Issued at confirm time (not creation), refreshed (not reissued) on reschedule. No Turnstile on these endpoints (acting requires an unguessable 32-byte token already, so bot enumeration isn't the threat model) but `rateLimitMiddleware` still applies as cheap defense-in-depth. No `audit_log` write for patient-initiated cancel/reschedule — that table is scoped to staff manual overrides. |
 
 ## Open / Non-Blocking Items
 
@@ -357,9 +389,15 @@ client #2), that's still open.
   needs to run locally with the real `DENTDI_SUPABASE_SERVICE_ROLE_KEY` —
   blocked in this sandbox by the same network egress restriction
   documented against `/_smoke`.
-- `POST /bookings/cancel`/reschedule and admin-side booking management
-  (list/force-book/staff-cancel) are deferred — schema already supports
-  both, no migration needed when they're built.
+- Admin-side booking management (list/force-book/staff-cancel/patient
+  management/staff+hours CRUD) is deferred — needs Supabase Auth session
+  verification + RBAC middleware (nothing issues/verifies a staff JWT
+  today) before any of it can be built. Schema (`business_members`,
+  `roles`, `audit_log`, `bookings.source='admin_manual'`,
+  `bookings.cancelled_by`) already supports it, no migration needed.
+- End-to-end curl verification of the cancel/reschedule flow needs to run
+  locally with the real `DENTDI_SUPABASE_SERVICE_ROLE_KEY` — same sandbox
+  network restriction as the rest of the booking flow.
 
 ## Working Agreement
 

@@ -5,11 +5,18 @@ import { hasBufferConflict } from "../lib/availability.js";
 import { selectMatchingPatient, type PatientCandidate } from "../lib/patient-matching.js";
 import { classifySupabaseError, isIdempotencyKeyViolation } from "../lib/pg-errors.js";
 import { generateRawToken, hashToken } from "../lib/tokens.js";
-import { sendVerificationLink } from "../lib/notifications.js";
+import { sendManagementLinks, sendVerificationLink } from "../lib/notifications.js";
 import { verifyTurnstileToken } from "../lib/turnstile.js";
 import { rateLimitMiddleware } from "../middleware/rate-limit.js";
 import { tenantMiddleware, type TenantVariables } from "../middleware/tenant.js";
-import { confirmBookingSchema, createBookingSchema } from "./bookings.schema.js";
+import {
+  cancelBookingSchema,
+  confirmBookingSchema,
+  createBookingSchema,
+  rescheduleBookingSchema,
+} from "./bookings.schema.js";
+
+const FINALIZED_STATUSES = ["cancelled", "completed", "no_show"] as const;
 
 export const bookingsRoute = new Hono<{ Variables: TenantVariables }>();
 
@@ -248,7 +255,216 @@ bookingsRoute.post("/bookings/confirm", tenantMiddleware, async (c) => {
     .update({ used_at: new Date().toISOString() })
     .eq("id", tokenRow.id);
 
-  return c.json({ booking });
+  // Issue cancel/reschedule capability tokens now that the booking is real.
+  // Unlike the confirm token these are never marked used_at — see
+  // routes/bookings.ts's cancel/reschedule handlers and CLAUDE.md for the
+  // capability-token model (valid until the appointment passes or the
+  // booking's own status makes the action invalid).
+  const cancelRawToken = generateRawToken();
+  const rescheduleRawToken = generateRawToken();
+  await supabase.from("booking_verification_tokens").insert([
+    {
+      booking_id: booking.id,
+      purpose: "cancel",
+      token_hash: hashToken(cancelRawToken),
+      expires_at: booking.starts_at,
+    },
+    {
+      booking_id: booking.id,
+      purpose: "reschedule",
+      token_hash: hashToken(rescheduleRawToken),
+      expires_at: booking.starts_at,
+    },
+  ]);
+
+  const origin = env.NODE_ENV === "production" ? "" : "http://localhost:" + env.PORT;
+  const cancelUrl = `${origin}/bookings/cancel?token=${cancelRawToken}`;
+  const rescheduleUrl = `${origin}/bookings/reschedule?token=${rescheduleRawToken}`;
+
+  const { data: patient } = await supabase
+    .from("patients")
+    .select("email, phone")
+    .eq("id", booking.patient_id)
+    .maybeSingle();
+  const channel: "email" | "sms" = patient?.email ? "email" : "sms";
+  const to = patient?.email ?? patient?.phone ?? "";
+
+  const sendResult = await sendManagementLinks({
+    channel,
+    to,
+    cancelUrl,
+    rescheduleUrl,
+    locale: booking.locale,
+  });
+
+  await supabase.from("notification_log").insert([
+    {
+      booking_id: booking.id,
+      channel,
+      template: "booking_cancel_link",
+      locale: booking.locale,
+      status: sendResult.cancel.status === "sent" ? "sent" : "pending",
+      provider_message_id: sendResult.cancel.providerMessageId,
+      error: sendResult.cancel.error,
+    },
+    {
+      booking_id: booking.id,
+      channel,
+      template: "booking_reschedule_link",
+      locale: booking.locale,
+      status: sendResult.reschedule.status === "sent" ? "sent" : "pending",
+      provider_message_id: sendResult.reschedule.providerMessageId,
+      error: sendResult.reschedule.error,
+    },
+  ]);
+
+  const responseBody: Record<string, unknown> = { booking };
+  if (env.NODE_ENV !== "production") {
+    responseBody._dev_cancel_url = cancelUrl;
+    responseBody._dev_reschedule_url = rescheduleUrl;
+  }
+
+  return c.json(responseBody);
+});
+
+bookingsRoute.post("/bookings/cancel", tenantMiddleware, rateLimitMiddleware, async (c) => {
+  const json = await c.req.json().catch(() => null);
+  const parsed = cancelBookingSchema.safeParse(json);
+  if (!parsed.success) {
+    return c.json({ error: "validation_error", details: parsed.error.issues }, 400);
+  }
+
+  const tenant = c.get("tenant");
+  const supabase = getServiceRoleClient(tenant);
+  const tokenHash = hashToken(parsed.data.token);
+
+  const { data: tokenRow } = await supabase
+    .from("booking_verification_tokens")
+    .select("id, booking_id, expires_at, purpose")
+    .eq("token_hash", tokenHash)
+    .eq("purpose", "cancel")
+    .maybeSingle();
+
+  if (!tokenRow || new Date(tokenRow.expires_at) < new Date()) {
+    return c.json({ error: "invalid_or_expired_token" }, 400);
+  }
+
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("id, status, starts_at")
+    .eq("id", tokenRow.booking_id)
+    .maybeSingle();
+
+  if (!booking) {
+    return c.json({ error: "invalid_or_expired_token" }, 400);
+  }
+  if (FINALIZED_STATUSES.includes(booking.status as (typeof FINALIZED_STATUSES)[number])) {
+    return c.json({ error: "already_finalized" }, 409);
+  }
+  if (new Date(booking.starts_at) < new Date()) {
+    return c.json({ error: "appointment_already_passed" }, 409);
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from("bookings")
+    .update({ status: "cancelled", cancelled_at: new Date().toISOString(), cancelled_by: null })
+    .eq("id", booking.id)
+    .select("*")
+    .single();
+
+  if (updateError || !updated) {
+    const { httpStatus, body } = classifySupabaseError(updateError ?? {});
+    return c.json(body, httpStatus as 409 | 500);
+  }
+
+  return c.json({ booking: updated });
+});
+
+bookingsRoute.post("/bookings/reschedule", tenantMiddleware, rateLimitMiddleware, async (c) => {
+  const json = await c.req.json().catch(() => null);
+  const parsed = rescheduleBookingSchema.safeParse(json);
+  if (!parsed.success) {
+    return c.json({ error: "validation_error", details: parsed.error.issues }, 400);
+  }
+
+  const tenant = c.get("tenant");
+  const supabase = getServiceRoleClient(tenant);
+  const tokenHash = hashToken(parsed.data.token);
+
+  const { data: tokenRow } = await supabase
+    .from("booking_verification_tokens")
+    .select("id, booking_id, expires_at, purpose")
+    .eq("token_hash", tokenHash)
+    .eq("purpose", "reschedule")
+    .maybeSingle();
+
+  if (!tokenRow || new Date(tokenRow.expires_at) < new Date()) {
+    return c.json({ error: "invalid_or_expired_token" }, 400);
+  }
+
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("id, status, starts_at, staff_id, service_id")
+    .eq("id", tokenRow.booking_id)
+    .maybeSingle();
+
+  if (!booking) {
+    return c.json({ error: "invalid_or_expired_token" }, 400);
+  }
+  if (FINALIZED_STATUSES.includes(booking.status as (typeof FINALIZED_STATUSES)[number])) {
+    return c.json({ error: "already_finalized" }, 409);
+  }
+  if (new Date(booking.starts_at) < new Date()) {
+    return c.json({ error: "appointment_already_passed" }, 409);
+  }
+
+  const { data: service } = await supabase
+    .from("services")
+    .select("duration_minutes, buffer_minutes_before, buffer_minutes_after")
+    .eq("id", booking.service_id)
+    .maybeSingle();
+  if (!service) {
+    return c.json({ error: "invalid_service" }, 422);
+  }
+
+  const newStartsAt = new Date(parsed.data.newStartsAt);
+  const newEndsAt = new Date(newStartsAt.getTime() + service.duration_minutes * 60_000);
+
+  const earliestStartMs = Date.now() + env.MIN_BOOKING_LEAD_MINUTES * 60_000;
+  if (newStartsAt.getTime() < earliestStartMs) {
+    return c.json({ error: "slot_unavailable" }, 409);
+  }
+
+  if (!booking.staff_id) {
+    return c.json({ error: "slot_unavailable" }, 409);
+  }
+  const conflict = await hasExistingConflict(supabase, booking.staff_id, newStartsAt, newEndsAt, service, booking.id);
+  if (conflict) {
+    return c.json({ error: "slot_unavailable" }, 409);
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from("bookings")
+    .update({ starts_at: newStartsAt.toISOString(), ends_at: newEndsAt.toISOString() })
+    .eq("id", booking.id)
+    .select("*")
+    .single();
+
+  if (updateError || !updated) {
+    const { httpStatus, body } = classifySupabaseError(updateError ?? {});
+    return c.json(body, httpStatus as 409 | 500);
+  }
+
+  // Keep the cancel/reschedule tokens alive through to the new appointment
+  // time — they're capability tokens tied to booking.starts_at, not
+  // single-use, so this is a refresh rather than reissuing new tokens.
+  await supabase
+    .from("booking_verification_tokens")
+    .update({ expires_at: updated.starts_at })
+    .eq("booking_id", booking.id)
+    .in("purpose", ["cancel", "reschedule"]);
+
+  return c.json({ booking: updated });
 });
 
 async function hasExistingConflict(
@@ -257,15 +473,20 @@ async function hasExistingConflict(
   startsAt: Date,
   endsAt: Date,
   service: { buffer_minutes_before: number; buffer_minutes_after: number },
+  excludeBookingId?: string,
 ): Promise<boolean> {
   const bufferMs = 24 * 60 * 60_000; // widen the query window by a day either side to safely catch buffer-adjacent bookings
-  const { data: nearby } = await supabase
+  let query = supabase
     .from("bookings")
     .select("starts_at, ends_at, services:service_id(buffer_minutes_before, buffer_minutes_after)")
     .eq("staff_id", staffId)
     .not("status", "in", "(cancelled,no_show)")
     .gte("starts_at", new Date(startsAt.getTime() - bufferMs).toISOString())
     .lte("starts_at", new Date(endsAt.getTime() + bufferMs).toISOString());
+  if (excludeBookingId) {
+    query = query.neq("id", excludeBookingId);
+  }
+  const { data: nearby } = await query;
 
   return hasBufferConflict(
     {

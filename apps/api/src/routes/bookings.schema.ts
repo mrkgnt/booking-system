@@ -33,3 +33,16 @@ export const confirmBookingSchema = z.object({
   token: z.string().min(10),
 });
 export type ConfirmBookingInput = z.infer<typeof confirmBookingSchema>;
+
+export const cancelBookingSchema = z.object({
+  token: z.string().min(10),
+});
+export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
+
+export const rescheduleBookingSchema = z.object({
+  token: z.string().min(10),
+  // Server derives the new endsAt from the booking's service duration —
+  // same "never trust a client-submitted end time" rule as createBookingSchema.
+  newStartsAt: z.string().datetime(),
+});
+export type RescheduleBookingInput = z.infer<typeof rescheduleBookingSchema>;
