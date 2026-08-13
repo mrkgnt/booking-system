@@ -439,6 +439,62 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- 17. bookings_no_overlap exclusion constraint blocks a genuinely
+-- overlapping booking for the same staff member, but allows a
+-- non-overlapping one (sanity check the constraint isn't overly broad)
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_service_id uuid;
+  v_staff_id uuid;
+  v_patient_a uuid;
+  v_patient_b uuid;
+  v_patient_c uuid;
+  v_overlap_blocked boolean := false;
+  v_adjacent_allowed boolean := false;
+begin
+  select id into v_service_id from services limit 1;
+  select id into v_staff_id from staff limit 1;
+
+  begin
+    insert into patients (name) values ('OVERLAP CONSTRAINT TEST A') returning id into v_patient_a;
+    insert into bookings (patient_id, service_id, staff_id, starts_at, ends_at, locale)
+      values (v_patient_a, v_service_id, v_staff_id, '2027-03-01T10:00:00Z', '2027-03-01T10:30:00Z', 'en');
+
+    insert into patients (name) values ('OVERLAP CONSTRAINT TEST B') returning id into v_patient_b;
+    begin
+      insert into bookings (patient_id, service_id, staff_id, starts_at, ends_at, locale)
+        values (v_patient_b, v_service_id, v_staff_id, '2027-03-01T10:15:00Z', '2027-03-01T10:45:00Z', 'en');
+    exception when exclusion_violation then
+      v_overlap_blocked := true;
+    end;
+
+    -- Adjacent (touching, not overlapping) booking for the same staff
+    -- should be allowed — tstzrange is half-open [start, end), so back
+    -- to back appointments are legitimate, not a conflict.
+    insert into patients (name) values ('OVERLAP CONSTRAINT TEST C') returning id into v_patient_c;
+    begin
+      insert into bookings (patient_id, service_id, staff_id, starts_at, ends_at, locale)
+        values (v_patient_c, v_service_id, v_staff_id, '2027-03-01T10:30:00Z', '2027-03-01T11:00:00Z', 'en');
+      v_adjacent_allowed := true;
+    exception when exclusion_violation then
+      v_adjacent_allowed := false;
+    end;
+
+    raise exception using errcode = 'P0001', message = 'rollback_sentinel';
+  exception when others then
+    if sqlerrm != 'rollback_sentinel' then
+      raise;
+    end if;
+  end;
+
+  insert into test_results (test_name, passed, detail)
+    values ('bookings_no_overlap blocks genuine overlap, allows adjacent slots',
+      v_overlap_blocked and v_adjacent_allowed,
+      format('overlap_blocked=%s adjacent_allowed=%s', v_overlap_blocked, v_adjacent_allowed));
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Report
 -- ---------------------------------------------------------------------------
 select test_name, passed, detail from test_results order by seq;

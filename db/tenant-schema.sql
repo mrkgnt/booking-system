@@ -27,6 +27,13 @@
 
 create extension if not exists pgcrypto;
 
+-- Dedicated schema for non-pgcrypto extensions, per Supabase's own lint
+-- (extensions installed into `public` get flagged) — btree_gist below needs
+-- this. pgcrypto stays in public; it's the one exception Supabase itself
+-- pre-installs there and moving it is unnecessary churn.
+create schema if not exists extensions;
+create extension if not exists btree_gist with schema extensions;
+
 -- ============================================================================
 -- 1. BUSINESS PROFILE (singleton — exactly one row per project)
 -- ============================================================================
@@ -192,11 +199,26 @@ create table bookings (
   cancelled_by uuid references business_members(id),
   sent_to_accounting_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  -- Generated column backing the exclusion constraint below — Postgres
+  -- exclusion constraints need an indexable expression, not an arbitrary
+  -- pair of columns.
+  starts_at_range tstzrange generated always as (tstzrange(starts_at, ends_at)) stored
 );
 
 create index idx_bookings_time on bookings (staff_id, starts_at, ends_at);
 create index idx_bookings_patient on bookings (patient_id);
+
+-- Prevents two active (not cancelled/no_show) bookings for the same staff
+-- member from occupying overlapping time ranges — closes the double-booking
+-- race that a route-level "check then insert" alone can't fully close under
+-- concurrent requests. staff_id is not null in the WHERE clause because a
+-- staff-less booking can't be overlap-checked against a specific person.
+alter table bookings add constraint bookings_no_overlap
+  exclude using gist (
+    staff_id with =,
+    starts_at_range with &&
+  ) where (status not in ('cancelled', 'no_show') and staff_id is not null);
 
 create table booking_verification_tokens (
   id uuid primary key default gen_random_uuid(),

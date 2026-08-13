@@ -114,6 +114,7 @@ export type Database = {
           source: string
           staff_id: string | null
           starts_at: string
+          starts_at_range: unknown
           status: string
           updated_at: string
         }
@@ -133,6 +134,7 @@ export type Database = {
           source?: string
           staff_id?: string | null
           starts_at: string
+          starts_at_range?: unknown
           status?: string
           updated_at?: string
         }
@@ -152,6 +154,7 @@ export type Database = {
           source?: string
           staff_id?: string | null
           starts_at?: string
+          starts_at_range?: unknown
           status?: string
           updated_at?: string
         }
