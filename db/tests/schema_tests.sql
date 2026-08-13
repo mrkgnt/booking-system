@@ -277,17 +277,15 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 10-13. Access control tests via SET ROLE. These check the *combined*
--- effect of table-level GRANTs and RLS policies — Postgres enforces both,
--- independently, and a query is only allowed through if it clears both
--- layers. On this project anon/authenticated currently have no table-level
--- GRANT at all (permission denied happens before RLS is even evaluated),
--- which is a stronger form of "blocked" than an RLS-only denial would be.
--- Both outcomes count as a pass here; the detail column records which one
--- actually happened.
+-- 10-16. Access control tests via SET ROLE. Postgres enforces table-level
+-- GRANTs and RLS policies independently and in that order — a query only
+-- gets through if it clears both layers. anon has a narrow, explicit GRANT
+-- for the public catalog tables only (services/service_categories/staff/
+-- business_hours/translations) and nothing else; authenticated has full
+-- CRUD grants on every table, gated by is_active_member() through RLS.
 -- ---------------------------------------------------------------------------
 
--- 10. anon cannot read patients (PII)
+-- 10. anon cannot read patients (PII) — no grant at all on this table
 do $$
 declare
   v_count int;
@@ -309,7 +307,7 @@ begin
     values ('anon blocked from reading patients (PII)', v_blocked, v_reason);
 end $$;
 
--- 11. anon cannot read bookings
+-- 11. anon cannot read bookings — no grant at all on this table
 do $$
 declare
   v_count int;
@@ -331,54 +329,113 @@ begin
     values ('anon blocked from reading bookings', v_blocked, v_reason);
 end $$;
 
--- 12. anon cannot read services either — see CLAUDE.md open-decision note:
--- this means the public catalog is NOT directly browsable via Supabase
--- REST as things stand; the Hono API must proxy public catalog reads too,
--- not just booking writes, OR a deliberate public-read GRANT+policy pair
--- needs to be added for catalog tables. Documenting current behavior here,
--- not asserting it's the intended end state.
+-- 12. anon CAN read the public catalog directly (deliberate design choice —
+-- see PROJECT_CONTEXT.md / CLAUDE.md: nothing here is sensitive, so the
+-- booking widget reads it straight from Supabase rather than proxying
+-- through the Hono API).
 do $$
 declare
-  v_count int;
+  v_services int;
+  v_categories int;
+  v_staff int;
+  v_hours int;
+  v_translations int;
+begin
+  set local role anon;
+  select count(*) into v_services from services;
+  select count(*) into v_categories from service_categories;
+  select count(*) into v_staff from staff;
+  select count(*) into v_hours from business_hours;
+  select count(*) into v_translations from translations;
+  reset role;
+
+  insert into test_results (test_name, passed, detail)
+    values ('anon can read public catalog (services/categories/staff/hours/translations)',
+      v_services > 0 and v_categories > 0 and v_staff > 0 and v_hours > 0 and v_translations > 0,
+      format('services=%s categories=%s staff=%s hours=%s translations=%s', v_services, v_categories, v_staff, v_hours, v_translations));
+end $$;
+
+-- 13. anon cannot WRITE to the catalog — read-only grant only
+do $$
+declare
   v_blocked boolean := false;
-  v_reason text;
 begin
   begin
     set local role anon;
-    select count(*) into v_count from services;
+    insert into services (category_id, duration_minutes) values (null, 10);
     reset role;
-    v_blocked := (v_count = 0);
-    v_reason := format('anon saw %s rows', v_count);
   exception when insufficient_privilege then
     reset role;
     v_blocked := true;
-    v_reason := 'blocked at GRANT level (no SELECT privilege for anon) - see open-decision note on public catalog access';
   end;
   insert into test_results (test_name, passed, detail)
-    values ('anon blocked from reading services (catalog)', v_blocked, v_reason);
+    values ('anon blocked from writing to services (SELECT-only grant)', v_blocked,
+      case when v_blocked then null else 'insert unexpectedly succeeded' end);
 end $$;
 
--- 13. authenticated role with no matching active business_member is also
--- blocked (a bare JWT isn't enough; must be an active member row)
+-- 14. inactive services are hidden from anon (RLS filters is_active = true)
+do $$
+declare
+  v_service_id uuid;
+  v_visible_before boolean;
+  v_visible_after boolean;
+begin
+  begin
+    insert into services (duration_minutes, is_active) values (20, true) returning id into v_service_id;
+
+    set local role anon;
+    select exists(select 1 from services where id = v_service_id) into v_visible_before;
+    reset role;
+
+    update services set is_active = false where id = v_service_id;
+
+    set local role anon;
+    select exists(select 1 from services where id = v_service_id) into v_visible_after;
+    reset role;
+
+    raise exception using errcode = 'P0001', message = 'rollback_sentinel';
+  exception when others then
+    if sqlerrm != 'rollback_sentinel' then
+      raise;
+    end if;
+  end;
+
+  insert into test_results (test_name, passed, detail)
+    values ('anon only sees is_active=true services', v_visible_before = true and v_visible_after = false,
+      format('visible while active=%s, visible after deactivation=%s', v_visible_before, v_visible_after));
+end $$;
+
+-- 15. authenticated role with no matching active business_member row is
+-- blocked by RLS (reaches the policy check now that grants exist — a bare
+-- JWT isn't enough, must be an active member row)
 do $$
 declare
   v_count int;
+begin
+  set local role authenticated;
+  select count(*) into v_count from bookings;
+  reset role;
+  insert into test_results (test_name, passed, detail)
+    values ('authenticated non-member blocked from reading bookings (via RLS, not grant)', v_count = 0,
+      format('authenticated saw %s rows', v_count));
+end $$;
+
+-- 16. is_active_member() cannot be called anonymously as an RPC
+do $$
+declare
   v_blocked boolean := false;
-  v_reason text;
 begin
   begin
-    set local role authenticated;
-    select count(*) into v_count from bookings;
+    set local role anon;
+    perform is_active_member();
     reset role;
-    v_blocked := (v_count = 0);
-    v_reason := format('authenticated saw %s rows', v_count);
   exception when insufficient_privilege then
     reset role;
     v_blocked := true;
-    v_reason := 'blocked at GRANT level (no SELECT privilege for authenticated)';
   end;
   insert into test_results (test_name, passed, detail)
-    values ('authenticated non-member blocked from reading bookings', v_blocked, v_reason);
+    values ('anon cannot execute is_active_member() RPC', v_blocked,
+      case when v_blocked then null else 'call unexpectedly succeeded' end);
 end $$;
 
 -- ---------------------------------------------------------------------------

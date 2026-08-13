@@ -94,15 +94,17 @@ detail: see `PROJECT_CONTEXT.md`.
       `db/seed.sql` from scratch; `db/seed/purge.sql` clears all seed/dev
       data before real client data enters the project (per the GDPR/dev
       decision in the table above).
-- [x] **DB-level schema test suite: `db/tests/schema_tests.sql`, 13/13
+- [x] **DB-level schema test suite: `db/tests/schema_tests.sql`, 16/16
       passing.** Covers: business_profile singleton PK, roles.key
       uniqueness, bookings.idempotency_key uniqueness, bookings.status
       check constraint, translations composite uniqueness, staff_services
       composite PK dedup, patients→bookings cascade delete, staff delete
       correctly RESTRICTed when referenced by a booking (bookings.staff_id
       has no ON DELETE clause), staff→staff_services/business_hours
-      cascade delete, and 4 access-control tests via `SET ROLE`
-      (anon/authenticated blocked from patients/bookings/services).
+      cascade delete, and 6 access-control tests via `SET ROLE`
+      (anon blocked from patients/bookings, anon can read the public
+      catalog but only `is_active=true` rows and read-only, authenticated
+      non-members blocked by RLS, anon can't call `is_active_member()`).
       Every destructive test runs inside a nested begin/exception block
       forced to roll back via a sentinel exception (PL/pgSQL has no
       SAVEPOINT statement) — verified against live row counts before/after,
@@ -111,21 +113,52 @@ detail: see `PROJECT_CONTEXT.md`.
       that needs real env-based credentials that don't exist until the
       Hono API project is scaffolded — noted as a follow-up in the test
       file itself.
-      **Finding surfaced by the access-control tests (open decision, not
-      fixed):** `anon`/`authenticated` currently have no table-level GRANT
-      at all on this project (blocked before RLS is even evaluated), and
-      even the RLS policies as written would restrict ALL tables —
-      including `services`/`staff`/`service_categories`/`business_hours`
-      — to authenticated business members only. That means the public
-      booking widget cannot browse the catalog via direct Supabase REST
-      calls today; either (a) the Hono API must proxy catalog reads too,
-      not just booking writes, or (b) a deliberate public-read
-      GRANT+policy pair should be added for catalog tables to cut Hono
-      out of the read path. Not decided yet — flag before building the
-      Hono API's service-listing endpoints.
+      **Catalog-read-access decision: resolved.** The public booking
+      widget reads the catalog (`services`, `service_categories`, `staff`,
+      `business_hours`, `translations` scoped to public content types)
+      directly via Supabase REST using the anon/publishable key, rather
+      than proxying through Hono — nothing in these tables is sensitive
+      (service names/prices, staff names, hours), so routing it through
+      an extra API hop added latency/build cost for no real security gain.
+      Rejected alternative: embedding a client-side "identification
+      token" in the widget — anything shipped in browser JS is
+      extractable, so a static token can't function as a secret; the
+      actual boundary is the scoped GRANT + RLS policy, not key secrecy.
+      Implemented as `public_catalog_read_access` migration: `GRANT
+      SELECT` to `anon` on the 5 catalog tables only (everything else —
+      patients/bookings/business_members/etc. — still has zero grant to
+      anon), plus `for select to anon using (is_active = true)` policies
+      (business_hours has no is_active concept, exposed unconditionally;
+      translations scoped to an explicit allowlist of public entity_types
+      so a future sensitive entity_type isn't accidentally made public by
+      default). Booking creation and availability computation remain
+      entirely behind Hono + the service role key, unaffected — writes
+      are the real abuse surface, not catalog reads. Follow-up: rate
+      limiting on the anon-key read path (Supabase project-level API
+      limits or Cloudflare) is still needed before launch to bound
+      volume/scraping — noted as a pre-launch item, not an authorization
+      concern.
+      **Second, unrelated bug found and fixed while verifying the above:**
+      `authenticated` had literally zero table-level GRANTs on any table
+      (only the Postgres-default REFERENCES/TRIGGER/TRUNCATE) — the
+      `members access X` RLS policies were written assuming grants
+      existed, but they were never issued in the original schema. This
+      meant a real logged-in staff member would have gotten "permission
+      denied" on every table, independent of RLS/membership status —
+      the entire admin/staff backend would have been broken from day one.
+      Fixed via `grant_authenticated_member_access` migration (full CRUD
+      grant to `authenticated` on all 18 tables, matching what the
+      existing policies already assumed) plus
+      `scope_member_policies_to_authenticated` (the original policies had
+      no `to authenticated` clause, so Postgres evaluated them — and thus
+      `is_active_member()` — for `anon` too, which broke once anon's
+      EXECUTE on that function was revoked as an earlier hardening step).
+      `db/tenant-schema.sql` updated to include both fixes plus the
+      catalog-read policies, so future client projects get this correct
+      from the start rather than needing the same live patching.
+- [x] **Hono API catalog-read-access decision made** (see above) — no
+      longer blocking Hono scaffolding.
 - [ ] **Next:** scaffold the Hono API project — tenant-aware from day one.
-      Decide the catalog-read-access question above before/while building
-      the services/staff listing endpoints.
 - [ ] Implement and curl/Postman-test booking creation (server-side
       availability calc + idempotency + double opt-in). No UI until solid.
 - [ ] Generate TypeScript types from the live schema for the Hono API
@@ -161,6 +194,7 @@ client #2), that's still open.
 | GDPR / data residency | Supabase project region must be explicit EU (e.g. Frankfurt) |
 | Backend hosting | **Open** — Cloudflare Workers vs. Vercel not yet decided |
 | SMS provider | **Open** — not yet chosen (Twilio vs. EU-based alternative) |
+| Public catalog reads | Direct via Supabase REST with anon key (scoped GRANT+RLS on services/service_categories/staff/business_hours/translations only), not proxied through Hono — nothing in the catalog is sensitive, so the extra hop bought no security. No client-side "identification token" — anything shipped in browser JS is public and can't function as a secret. |
 
 ## Open / Non-Blocking Items
 
@@ -171,6 +205,11 @@ client #2), that's still open.
   policy for cancelled/old bookings.
 - SMS provider choice.
 - Backend hosting choice (Workers vs. Vercel).
+- Rate limiting on the anon-key public catalog read path (Supabase
+  project-level API limits or Cloudflare) — needed before launch to bound
+  volume/scraping on the now-public services/staff/hours endpoints. Not
+  an authorization gap (RLS/GRANTs are correctly scoped), purely a
+  volume-control item.
 
 ## Working Agreement
 
