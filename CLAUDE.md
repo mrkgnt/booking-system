@@ -79,13 +79,60 @@ detail: see `PROJECT_CONTEXT.md`.
       (`working_hours`, `blackout_dates`, `appointment_requests`, no real
       data) — dropped before applying the real schema, per explicit
       instruction.
-- [ ] **Next:** scaffold the Hono API project — tenant-aware from day one
-- [ ] Faker-based TypeScript seed script (services, staff, patients,
-      bookings across LV/RU/EN, past/future dates)
+- [x] **Faker-based TypeScript seed script built and run against the live
+      project.** `db/seed/generate-seed.ts` (deterministic, `faker.seed(42)`)
+      generates `db/seed.sql`: 6 service categories, 34 services (LV/RU/EN
+      name translations), 2 staff (dentist + hygienist, synthetic names —
+      no real Dent Di staff names used), 46 staff↔service links, 7
+      business_hours rows (Mon–Fri 9–18, weekends closed), 18 patients
+      across all 3 locales, 28 bookings spanning past/future dates and all
+      status values, 12 notification_log rows. Applied to the live project
+      via Supabase MCP `execute_sql` (chunked into sections — no
+      DATABASE_URL/service-role key available in this environment to run
+      the script directly against Supabase, only anon/publishable keys are
+      exposed via MCP by design). `npm run seed:generate` regenerates
+      `db/seed.sql` from scratch; `db/seed/purge.sql` clears all seed/dev
+      data before real client data enters the project (per the GDPR/dev
+      decision in the table above).
+- [x] **DB-level schema test suite: `db/tests/schema_tests.sql`, 13/13
+      passing.** Covers: business_profile singleton PK, roles.key
+      uniqueness, bookings.idempotency_key uniqueness, bookings.status
+      check constraint, translations composite uniqueness, staff_services
+      composite PK dedup, patients→bookings cascade delete, staff delete
+      correctly RESTRICTed when referenced by a booking (bookings.staff_id
+      has no ON DELETE clause), staff→staff_services/business_hours
+      cascade delete, and 4 access-control tests via `SET ROLE`
+      (anon/authenticated blocked from patients/bookings/services).
+      Every destructive test runs inside a nested begin/exception block
+      forced to roll back via a sentinel exception (PL/pgSQL has no
+      SAVEPOINT statement) — verified against live row counts before/after,
+      no residue left. Run manually via Supabase MCP `execute_sql`; not
+      yet wired into an automated `vitest`+`supabase-js` CI suite since
+      that needs real env-based credentials that don't exist until the
+      Hono API project is scaffolded — noted as a follow-up in the test
+      file itself.
+      **Finding surfaced by the access-control tests (open decision, not
+      fixed):** `anon`/`authenticated` currently have no table-level GRANT
+      at all on this project (blocked before RLS is even evaluated), and
+      even the RLS policies as written would restrict ALL tables —
+      including `services`/`staff`/`service_categories`/`business_hours`
+      — to authenticated business members only. That means the public
+      booking widget cannot browse the catalog via direct Supabase REST
+      calls today; either (a) the Hono API must proxy catalog reads too,
+      not just booking writes, or (b) a deliberate public-read
+      GRANT+policy pair should be added for catalog tables to cut Hono
+      out of the read path. Not decided yet — flag before building the
+      Hono API's service-listing endpoints.
+- [ ] **Next:** scaffold the Hono API project — tenant-aware from day one.
+      Decide the catalog-read-access question above before/while building
+      the services/staff listing endpoints.
 - [ ] Implement and curl/Postman-test booking creation (server-side
       availability calc + idempotency + double opt-in). No UI until solid.
 - [ ] Generate TypeScript types from the live schema for the Hono API
       (`supabase gen types typescript` or MCP equivalent) — not done yet.
+- [ ] Wire up automated DB tests (vitest + supabase-js) once the Hono API
+      project exists with real env-based Supabase credentials — today's
+      `db/tests/schema_tests.sql` is the manually-run equivalent.
 
 Note: schema was applied directly via the Supabase MCP server
 (`apply_migration`) against the live project, not through the originally
