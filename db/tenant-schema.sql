@@ -282,6 +282,7 @@ create table external_busy_blocks (
 create or replace function set_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = now();
@@ -309,6 +310,7 @@ returns boolean
 language sql
 stable
 security definer
+set search_path = public
 as $$
   select exists (
     select 1 from business_members bm
@@ -316,6 +318,14 @@ as $$
       and bm.status = 'active'
   );
 $$;
+
+-- is_active_member() only needs to run for authenticated requests (it's
+-- what "members access X" policies below evaluate for the authenticated
+-- role); anon has no business calling it directly either. Revoking here
+-- keeps the anon-facing catalog policies below from ever touching this
+-- function, and avoids exposing it as a public RPC endpoint.
+revoke execute on function is_active_member() from public;
+grant execute on function is_active_member() to authenticated;
 
 alter table business_profile enable row level security;
 alter table roles enable row level security;
@@ -336,42 +346,108 @@ alter table tenant_integrations enable row level security;
 alter table staff_calendar_connections enable row level security;
 alter table external_busy_blocks enable row level security;
 
+-- Policies are explicitly scoped "to authenticated" — without this they'd
+-- default to PUBLIC (all roles, including anon), which would make Postgres
+-- evaluate is_active_member() for anon too and throw "permission denied"
+-- once EXECUTE on that function is restricted to authenticated above.
 create policy "members access business_profile" on business_profile
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access roles" on roles
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access business_members" on business_members
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access translations" on translations
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access service_categories" on service_categories
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access services" on services
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access staff" on staff
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access staff_services" on staff_services
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access business_hours" on business_hours
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access closures" on closures
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access patients" on patients
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access bookings" on bookings
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access verification_tokens" on booking_verification_tokens
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access audit_log" on audit_log
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access notification_log" on notification_log
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access tenant_integrations" on tenant_integrations
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access staff_calendar_connections" on staff_calendar_connections
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access external_busy_blocks" on external_busy_blocks
-  for all using (is_active_member()) with check (is_active_member());
+  for all to authenticated using (is_active_member()) with check (is_active_member());
+
+-- RLS enable + a "for all" policy is not, on its own, enough for an
+-- authenticated business member to reach a table — Postgres checks
+-- table-level GRANTs before RLS is ever evaluated. Grant what the
+-- policies above already assume.
+grant select, insert, update, delete on business_profile to authenticated;
+grant select, insert, update, delete on roles to authenticated;
+grant select, insert, update, delete on business_members to authenticated;
+grant select, insert, update, delete on translations to authenticated;
+grant select, insert, update, delete on service_categories to authenticated;
+grant select, insert, update, delete on services to authenticated;
+grant select, insert, update, delete on staff to authenticated;
+grant select, insert, update, delete on staff_services to authenticated;
+grant select, insert, update, delete on business_hours to authenticated;
+grant select, insert, update, delete on closures to authenticated;
+grant select, insert, update, delete on patients to authenticated;
+grant select, insert, update, delete on bookings to authenticated;
+grant select, insert, update, delete on booking_verification_tokens to authenticated;
+grant select, insert, update, delete on audit_log to authenticated;
+grant select, insert, update, delete on notification_log to authenticated;
+grant select, insert, update, delete on tenant_integrations to authenticated;
+grant select, insert, update, delete on staff_calendar_connections to authenticated;
+grant select, insert, update, delete on external_busy_blocks to authenticated;
+
+-- ============================================================================
+-- 11. PUBLIC CATALOG READ ACCESS (anon)
+-- ============================================================================
+-- The booking widget browses the catalog directly via Supabase REST rather
+-- than proxying reads through the backend API — nothing in these tables is
+-- sensitive (service names/prices, staff names, business hours), so this
+-- trades no real security for a simpler/faster public read path. Everything
+-- patient/booking-related stays fully locked to authenticated members only
+-- (no grant to anon at all, above).
+
+grant select on service_categories to anon;
+grant select on services to anon;
+grant select on staff to anon;
+grant select on business_hours to anon;
+grant select on translations to anon;
+
+-- Only active/published rows are public.
+create policy "public read active service_categories" on service_categories
+  for select to anon using (is_active = true);
+create policy "public read active services" on services
+  for select to anon using (is_active = true);
+create policy "public read active bookable staff" on staff
+  for select to anon using (is_active = true);
+create policy "public read business_hours" on business_hours
+  for select to anon using (true);
+
+-- Scoped to known public-content entity types, so a future entity_type
+-- isn't accidentally made public by default (secure-by-default, not
+-- open-by-default) — nothing patient/booking-related is expected to ever
+-- live in this table, but the allowlist protects against that regardless.
+create policy "public read catalog translations" on translations
+  for select to anon
+  using (
+    entity_type in (
+      'service', 'service_category', 'staff',
+      'testimonial', 'gallery_item', 'site_section', 'booking_form_field'
+    )
+  );
 
 insert into business_profile (slug, name) values ('replace-me', 'Replace Me') ;
 insert into roles (key, label) values ('owner', 'Owner'), ('staff', 'Staff');
