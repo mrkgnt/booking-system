@@ -6,6 +6,7 @@ import { bookingsRoute } from "./routes/bookings.js";
 import { adminMeRoute } from "./routes/admin-me.js";
 import { adminBookingsRoute } from "./routes/admin-bookings.js";
 import { adminPatientsRoute } from "./routes/admin-patients.js";
+import { adminServiceCategoriesRoute } from "./routes/admin-service-categories.js";
 
 // Runtime-agnostic — no @hono/node-server, no wrangler/Vercel-specific code
 // here. Local dev wraps this in src/index.ts; a Workers/Vercel entry later
@@ -19,3 +20,4 @@ app.route("/", bookingsRoute);
 app.route("/", adminMeRoute);
 app.route("/", adminBookingsRoute);
 app.route("/", adminPatientsRoute);
+app.route("/", adminServiceCategoriesRoute);
