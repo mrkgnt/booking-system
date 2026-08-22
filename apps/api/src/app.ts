@@ -3,6 +3,7 @@ import { healthRoute } from "./routes/health.js";
 import { smokeRoute } from "./routes/_smoke.js";
 import { availabilityRoute } from "./routes/availability.js";
 import { bookingsRoute } from "./routes/bookings.js";
+import { adminMeRoute } from "./routes/admin-me.js";
 
 // Runtime-agnostic — no @hono/node-server, no wrangler/Vercel-specific code
 // here. Local dev wraps this in src/index.ts; a Workers/Vercel entry later
@@ -13,3 +14,4 @@ app.route("/", healthRoute);
 app.route("/", smokeRoute);
 app.route("/", availabilityRoute);
 app.route("/", bookingsRoute);
+app.route("/", adminMeRoute);
