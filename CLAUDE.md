@@ -340,6 +340,54 @@ detail: see `PROJECT_CONTEXT.md`.
       an explicit string transform (`val === "true" || val === "1"`)
       instead of `z.coerce.boolean()`. 60/60 vitest tests passing, `tsc
       --noEmit` clean after the fix.
+- [x] **Staff/admin backend built: Supabase-Auth-based staff login +
+      full `/admin/*` route set.** No login endpoint in Hono — staff
+      authenticate directly against Supabase Auth (the future staff
+      frontend calls `supabase-js`'s `signInWithPassword` itself).
+      **Architecture decision:** every `/admin/*` route chains
+      `tenantMiddleware` → `staffAuthMiddleware`
+      (`src/middleware/staffAuth.ts`), which validates the caller's
+      session and confirms active `business_members` status, then hands
+      the route a **user-scoped Supabase client** (anon key + the staff
+      member's own JWT, via the new `getUserScopedClient()` in
+      `src/lib/supabase.ts`). Every `/admin/*` data query uses that
+      client (`c.get("supabaseUser")`), never the service-role client —
+      Postgres RLS (`is_active_member()`, already live on every table) is
+      the real authorization boundary, not app-level logic. The one
+      exception is `staffAuthMiddleware`'s own membership lookup, which
+      uses the service-role client specifically so a disabled/invited
+      member gets a clean 401/403 instead of RLS silently returning zero
+      rows on every query. Routes built: `GET /admin/me`; `GET/POST
+      /admin/bookings` (list/filter, force-book), `POST
+      /admin/bookings/:id/cancel`, `POST /admin/bookings/:id/reschedule`
+      (staff overrides skip the patient-facing courtesy rules —
+      `MIN_BOOKING_LEAD_MINUTES`, past-`starts_at` rejection — but still
+      run the buffer-aware `hasExistingConflict` check, now shared via
+      `src/lib/booking-conflicts.ts` after extracting it out of the
+      public `routes/bookings.ts`); `GET/PATCH /admin/patients`,
+      `/admin/patients/:id` (detail + booking history); full CRUD on
+      `service_categories`, `services`, and `staff` (translated fields —
+      `name`/`description`/`bio` — go through a new shared helper,
+      `src/lib/translations.ts`, upserting/fetching/deleting rows in the
+      `translations` table and reshaping them to `{ locale: value }` on
+      every response) plus `PUT /admin/staff/:id/services`; `GET/PUT
+      /admin/business-hours`; `GET/POST/DELETE /admin/closures`. Every
+      manual override (`force_book`, `staff_cancel`, `staff_reschedule`)
+      writes one `audit_log` row. `roles.permissions` stays an unused
+      reserved-for-later stub — owner/staff have identical `/admin/*`
+      access, per `PROJECT_CONTEXT.md`'s documented MVP policy.
+      **Testing:** built test-first per route (14 tasks, one commit
+      each) — 102/102 vitest tests passing (up from 60), `tsc --noEmit`
+      clean throughout. **Not verified live** — built and run in a
+      network-restricted sandbox (same `*.supabase.co` egress
+      restriction documented elsewhere in this file), so only the
+      pre-DB-call shape/auth assertions (400/401/404 paths) are proven.
+      Outstanding, to run locally against the real Dent Di project:
+      bootstrapping the first owner account (create a Supabase Auth user
+      + matching `business_members` row — needs a real password, not
+      something to invent in an automated pass) and the full 2xx-path
+      curl sequence for every route above. Tracked in Open/Non-Blocking
+      Items below.
 
 Note: schema was applied directly via the Supabase MCP server
 (`apply_migration`) against the live project, not through the originally
@@ -376,6 +424,7 @@ client #2), that's still open.
 | Double opt-in delivery | Stubbed (log confirm link server-side + dev-only `_dev_confirm_url` response field, `notification_log` marked honestly as `pending`/`failed`) rather than wiring a real email/SMS vendor now — no provider is chosen yet and picking one shouldn't block proving the booking logic itself. Swapping in a real provider later only touches `src/lib/notifications.ts`. |
 | Rate limiting / bot protection (interim) | In-memory rate limiter + env-gated Turnstile stub (disabled by default, fails closed if enabled without a secret key) — real requirements from PROJECT_CONTEXT.md, built structurally correct now rather than skipped, but explicitly insufficient once actually deployed (no shared memory across serverless instances; no Cloudflare site key exists yet). |
 | Cancel/reschedule token model | Capability tokens, not single-use — valid until `booking.starts_at` passes or `status` becomes finalized, not gated by `used_at`. Simpler than reissuing tokens per action and correctly allows repeat reschedules. Issued at confirm time (not creation), refreshed (not reissued) on reschedule. No Turnstile on these endpoints (acting requires an unguessable 32-byte token already, so bot enumeration isn't the threat model) but `rateLimitMiddleware` still applies as cheap defense-in-depth. No `audit_log` write for patient-initiated cancel/reschedule — that table is scoped to staff manual overrides. |
+| Admin/staff data-access pattern | Admin routes use a per-request Supabase client scoped to the staff member's own JWT (anon key + Authorization forwarding), relying on existing RLS (`is_active_member()`) as the real authorization boundary — not the service-role key. `staffAuthMiddleware`'s one service-role read (`business_members` status) exists only to turn "RLS returns zero rows" into a clean 401/403. |
 
 ## Open / Non-Blocking Items
 
@@ -404,15 +453,25 @@ client #2), that's still open.
   needs to run locally with the real `DENTDI_SUPABASE_SERVICE_ROLE_KEY` —
   blocked in this sandbox by the same network egress restriction
   documented against `/_smoke`.
-- Admin-side booking management (list/force-book/staff-cancel/patient
-  management/staff+hours CRUD) is deferred — needs Supabase Auth session
-  verification + RBAC middleware (nothing issues/verifies a staff JWT
-  today) before any of it can be built. Schema (`business_members`,
-  `roles`, `audit_log`, `bookings.source='admin_manual'`,
-  `bookings.cancelled_by`) already supports it, no migration needed.
 - End-to-end curl verification of the cancel/reschedule flow needs to run
   locally with the real `DENTDI_SUPABASE_SERVICE_ROLE_KEY` — same sandbox
   network restriction as the rest of the booking flow.
+- Admin-side booking management is now **built** (see "Staff/admin
+  backend built" above: `GET /admin/me`; bookings list/force-book/
+  cancel/reschedule; patients list/detail/edit; service_categories,
+  services, staff CRUD + staff_services linking; business_hours;
+  closures) but **not yet live-verified.** Two things need to run
+  locally against the real Dent Di project, outside this sandbox's
+  network restriction:
+  1. Bootstrap the first owner account — create a Supabase Auth user via
+     the Admin API with a real password (not something an automated
+     pass should invent) and the matching `business_members` row, then
+     grab a session token.
+  2. Using that token, run the 2xx-path curl sequence for every route
+     above (documented per-task in
+     `docs/superpowers/plans/2026-08-22-staff-admin-backend.md`, Task
+     17's verification table) and confirm each writes the expected
+     `audit_log` row where applicable.
 
 ## Working Agreement
 
