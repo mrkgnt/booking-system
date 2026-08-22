@@ -38,6 +38,9 @@ const envSchema = z.object({
   // Booking-creation tunables.
   MIN_BOOKING_LEAD_MINUTES: z.coerce.number().int().nonnegative().default(60),
   VERIFICATION_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(30),
+
+  // Admin app CORS origin — browser-based back-office UI calling /admin/* routes.
+  ADMIN_APP_ORIGIN: z.string().url().default("http://localhost:4321"),
 });
 
 export type Env = z.infer<typeof envSchema>;
