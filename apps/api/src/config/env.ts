@@ -20,7 +20,12 @@ const envSchema = z.object({
   // site key exists yet. When enabled without a secret key, booking
   // creation intentionally fails closed rather than silently skipping
   // verification (see routes/bookings.ts).
-  TURNSTILE_ENABLED: z.coerce.boolean().default(false),
+  // Not z.coerce.boolean() — that's `Boolean(value)`, and env vars are
+  // always strings, so the literal string "false" coerces to `true`.
+  TURNSTILE_ENABLED: z
+    .string()
+    .default("false")
+    .transform((val) => val === "true" || val === "1"),
   TURNSTILE_SECRET_KEY: z.string().optional(),
 
   // In-memory rate limiting on booking-creation endpoints. Explicitly

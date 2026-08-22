@@ -325,6 +325,21 @@ detail: see `PROJECT_CONTEXT.md`.
       `db/tests/schema_tests.sql` is the manually-run equivalent. The
       `apps/api` vitest scaffold (`vitest.config.ts`, `test/setup.ts`,
       `test/health.test.ts`) is the starting point for this.
+- [x] **Bug found and fixed: `TURNSTILE_ENABLED` env parsing.**
+      `src/config/env.ts` used `z.coerce.boolean()`, which is just
+      `Boolean(value)` under the hood — since env vars are always strings,
+      the literal string `"false"` (exactly what `.env.example` documents)
+      coerced to `true`. That silently turned Turnstile on with no secret
+      key configured, and since the code correctly fails closed in that
+      state (`verifyTurnstileToken`), every booking creation would have
+      been rejected. Only masked before because nothing had actually
+      loaded `TURNSTILE_ENABLED=false` as a string — zod's `.default(false)`
+      (a real boolean, bypassing coercion) covered for it whenever the var
+      was simply absent. Caught by `test/turnstile.test.ts` failing once a
+      real `.env` file was introduced to run the suite locally. Fixed with
+      an explicit string transform (`val === "true" || val === "1"`)
+      instead of `z.coerce.boolean()`. 60/60 vitest tests passing, `tsc
+      --noEmit` clean after the fix.
 
 Note: schema was applied directly via the Supabase MCP server
 (`apply_migration`) against the live project, not through the originally
