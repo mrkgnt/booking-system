@@ -9,3 +9,19 @@ export const listBookingsQuerySchema = z.object({
     .optional(),
 });
 export type ListBookingsQuery = z.infer<typeof listBookingsQuerySchema>;
+
+export const forceBookSchema = z.object({
+  serviceId: z.string().uuid(),
+  staffId: z.string().uuid(),
+  startsAt: z.string().datetime(),
+  locale: z.enum(["lv", "ru", "en"]),
+  description: z.string().max(2000).optional(),
+  patient: z
+    .object({
+      name: z.string().min(1).max(200),
+      email: z.string().email().optional(),
+      phone: z.string().min(5).max(32).optional(),
+    })
+    .refine((p) => p.email || p.phone, { message: "email or phone is required" }),
+});
+export type ForceBookInput = z.infer<typeof forceBookSchema>;

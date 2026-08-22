@@ -12,3 +12,14 @@ describe("GET /admin/bookings — tenant, auth, and validation shape checks", ()
     expect(res.status).toBe(401);
   });
 });
+
+describe("POST /admin/bookings (force-book) — tenant, auth, and validation shape checks", () => {
+  it("401s with no Authorization header", async () => {
+    const res = await app.request("/admin/bookings", {
+      method: "POST",
+      headers: { "X-Tenant-Slug": "dentdi", "Content-Type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(401);
+  });
+});
