@@ -3,9 +3,6 @@
   "private": true,
   "type": "module",
   "description": "Multi-tenant booking SaaS platform. Root workspace holds db/ tooling (seed scripts, DB tests) at the top level and apps/* for the Hono API and, later, the Astro site.",
-  "workspaces": [
-    "apps/*"
-  ],
   "scripts": {
     "seed:generate": "tsx db/seed/generate-seed.ts"
   },

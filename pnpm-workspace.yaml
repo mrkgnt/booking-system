@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+
+# esbuild's postinstall (used transitively by vitest) needs its build
+# script allow-listed explicitly — pnpm blocks dependency build scripts by
+# default as a supply-chain safety measure.
+allowBuilds:
+  esbuild: true
