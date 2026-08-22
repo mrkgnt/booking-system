@@ -25,3 +25,5 @@ export const forceBookSchema = z.object({
     .refine((p) => p.email || p.phone, { message: "email or phone is required" }),
 });
 export type ForceBookInput = z.infer<typeof forceBookSchema>;
+
+export const bookingIdParamSchema = z.object({ id: z.string().uuid() });

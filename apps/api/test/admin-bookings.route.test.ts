@@ -23,3 +23,13 @@ describe("POST /admin/bookings (force-book) — tenant, auth, and validation sha
     expect(res.status).toBe(401);
   });
 });
+
+describe("POST /admin/bookings/:id/cancel — tenant, auth, and validation shape checks", () => {
+  it("401s with no Authorization header", async () => {
+    const res = await app.request("/admin/bookings/00000000-0000-0000-0000-000000000001/cancel", {
+      method: "POST",
+      headers: { "X-Tenant-Slug": "dentdi" },
+    });
+    expect(res.status).toBe(401);
+  });
+});

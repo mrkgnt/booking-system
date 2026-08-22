@@ -5,9 +5,11 @@ import { classifySupabaseError } from "../lib/pg-errors.js";
 import { selectMatchingPatient, type PatientCandidate } from "../lib/patient-matching.js";
 import { staffAuthMiddleware, type StaffAuthVariables } from "../middleware/staffAuth.js";
 import { tenantMiddleware, type TenantVariables } from "../middleware/tenant.js";
-import { forceBookSchema, listBookingsQuerySchema } from "./admin-bookings.schema.js";
+import { bookingIdParamSchema, forceBookSchema, listBookingsQuerySchema } from "./admin-bookings.schema.js";
 
 export const adminBookingsRoute = new Hono<{ Variables: TenantVariables & StaffAuthVariables }>();
+
+const FINALIZED_STATUSES = ["cancelled", "completed", "no_show"] as const;
 
 adminBookingsRoute.get("/admin/bookings", tenantMiddleware, staffAuthMiddleware, async (c) => {
   const parsed = listBookingsQuerySchema.safeParse(c.req.query());
@@ -129,4 +131,47 @@ adminBookingsRoute.post("/admin/bookings", tenantMiddleware, staffAuthMiddleware
   });
 
   return c.json({ booking }, 201);
+});
+
+adminBookingsRoute.post("/admin/bookings/:id/cancel", tenantMiddleware, staffAuthMiddleware, async (c) => {
+  const parsedParams = bookingIdParamSchema.safeParse({ id: c.req.param("id") });
+  if (!parsedParams.success) {
+    return c.json({ error: "validation_error", details: parsedParams.error.issues }, 400);
+  }
+  const supabase = c.get("supabaseUser");
+  const staffMember = c.get("staffMember");
+
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("*")
+    .eq("id", parsedParams.data.id)
+    .maybeSingle();
+  if (!booking) {
+    return c.json({ error: "not_found" }, 404);
+  }
+  if (FINALIZED_STATUSES.includes(booking.status as (typeof FINALIZED_STATUSES)[number])) {
+    return c.json({ error: "already_finalized" }, 409);
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from("bookings")
+    .update({ status: "cancelled", cancelled_at: new Date().toISOString(), cancelled_by: staffMember.id })
+    .eq("id", booking.id)
+    .select("*")
+    .single();
+  if (updateError || !updated) {
+    const { httpStatus, body } = classifySupabaseError(updateError ?? {});
+    return c.json(body, httpStatus as 409 | 500);
+  }
+
+  await supabase.from("audit_log").insert({
+    actor_member_id: staffMember.id,
+    action: "staff_cancel",
+    target_type: "booking",
+    target_id: booking.id,
+    before: booking as unknown as Json,
+    after: updated as unknown as Json,
+  });
+
+  return c.json({ booking: updated });
 });
