@@ -5,7 +5,12 @@ import { classifySupabaseError } from "../lib/pg-errors.js";
 import { selectMatchingPatient, type PatientCandidate } from "../lib/patient-matching.js";
 import { staffAuthMiddleware, type StaffAuthVariables } from "../middleware/staffAuth.js";
 import { tenantMiddleware, type TenantVariables } from "../middleware/tenant.js";
-import { bookingIdParamSchema, forceBookSchema, listBookingsQuerySchema } from "./admin-bookings.schema.js";
+import {
+  bookingIdParamSchema,
+  forceBookSchema,
+  listBookingsQuerySchema,
+  staffRescheduleSchema,
+} from "./admin-bookings.schema.js";
 
 export const adminBookingsRoute = new Hono<{ Variables: TenantVariables & StaffAuthVariables }>();
 
@@ -167,6 +172,81 @@ adminBookingsRoute.post("/admin/bookings/:id/cancel", tenantMiddleware, staffAut
   await supabase.from("audit_log").insert({
     actor_member_id: staffMember.id,
     action: "staff_cancel",
+    target_type: "booking",
+    target_id: booking.id,
+    before: booking as unknown as Json,
+    after: updated as unknown as Json,
+  });
+
+  return c.json({ booking: updated });
+});
+
+adminBookingsRoute.post("/admin/bookings/:id/reschedule", tenantMiddleware, staffAuthMiddleware, async (c) => {
+  const parsedParams = bookingIdParamSchema.safeParse({ id: c.req.param("id") });
+  if (!parsedParams.success) {
+    return c.json({ error: "validation_error", details: parsedParams.error.issues }, 400);
+  }
+  const json = await c.req.json().catch(() => null);
+  const parsed = staffRescheduleSchema.safeParse(json);
+  if (!parsed.success) {
+    return c.json({ error: "validation_error", details: parsed.error.issues }, 400);
+  }
+
+  const supabase = c.get("supabaseUser");
+  const staffMember = c.get("staffMember");
+
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("*")
+    .eq("id", parsedParams.data.id)
+    .maybeSingle();
+  if (!booking) {
+    return c.json({ error: "not_found" }, 404);
+  }
+  if (FINALIZED_STATUSES.includes(booking.status as (typeof FINALIZED_STATUSES)[number])) {
+    return c.json({ error: "already_finalized" }, 409);
+  }
+  if (!booking.staff_id) {
+    return c.json({ error: "slot_unavailable" }, 409);
+  }
+
+  const { data: service } = await supabase
+    .from("services")
+    .select("duration_minutes, buffer_minutes_before, buffer_minutes_after")
+    .eq("id", booking.service_id)
+    .maybeSingle();
+  if (!service) {
+    return c.json({ error: "invalid_service" }, 422);
+  }
+
+  const newStartsAt = new Date(parsed.data.newStartsAt);
+  const newEndsAt = new Date(newStartsAt.getTime() + service.duration_minutes * 60_000);
+
+  const conflict = await hasExistingConflict(supabase, booking.staff_id, newStartsAt, newEndsAt, service, booking.id);
+  if (conflict) {
+    return c.json({ error: "slot_unavailable" }, 409);
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from("bookings")
+    .update({ starts_at: newStartsAt.toISOString(), ends_at: newEndsAt.toISOString() })
+    .eq("id", booking.id)
+    .select("*")
+    .single();
+  if (updateError || !updated) {
+    const { httpStatus, body } = classifySupabaseError(updateError ?? {});
+    return c.json(body, httpStatus as 409 | 500);
+  }
+
+  await supabase
+    .from("booking_verification_tokens")
+    .update({ expires_at: updated.starts_at })
+    .eq("booking_id", booking.id)
+    .in("purpose", ["cancel", "reschedule"]);
+
+  await supabase.from("audit_log").insert({
+    actor_member_id: staffMember.id,
+    action: "staff_reschedule",
     target_type: "booking",
     target_id: booking.id,
     before: booking as unknown as Json,

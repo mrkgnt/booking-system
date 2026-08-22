@@ -33,3 +33,14 @@ describe("POST /admin/bookings/:id/cancel — tenant, auth, and validation shape
     expect(res.status).toBe(401);
   });
 });
+
+describe("POST /admin/bookings/:id/reschedule — tenant, auth, and validation shape checks", () => {
+  it("401s with no Authorization header", async () => {
+    const res = await app.request("/admin/bookings/00000000-0000-0000-0000-000000000001/reschedule", {
+      method: "POST",
+      headers: { "X-Tenant-Slug": "dentdi", "Content-Type": "application/json" },
+      body: JSON.stringify({ newStartsAt: "2027-03-01T10:00:00.000Z" }),
+    });
+    expect(res.status).toBe(401);
+  });
+});

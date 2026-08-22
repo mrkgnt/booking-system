@@ -27,3 +27,8 @@ export const forceBookSchema = z.object({
 export type ForceBookInput = z.infer<typeof forceBookSchema>;
 
 export const bookingIdParamSchema = z.object({ id: z.string().uuid() });
+
+export const staffRescheduleSchema = z.object({
+  newStartsAt: z.string().datetime(),
+});
+export type StaffRescheduleInput = z.infer<typeof staffRescheduleSchema>;
