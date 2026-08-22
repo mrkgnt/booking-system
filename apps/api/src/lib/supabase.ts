@@ -27,3 +27,14 @@ export function getAnonClient(tenant: TenantConfig): TypedSupabaseClient {
     auth: { persistSession: false },
   });
 }
+
+// User-scoped client: PostgREST reads the caller's own JWT off this
+// client's requests, so auth.uid() resolves to the staff member and RLS
+// (is_active_member()) becomes the real authorization boundary for every
+// /admin/* route — see staffAuth.ts and CLAUDE.md for the full rationale.
+export function getUserScopedClient(tenant: TenantConfig, accessToken: string): TypedSupabaseClient {
+  return createClient<Database>(tenant.supabaseUrl, tenant.supabaseAnonKey, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+}
