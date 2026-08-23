@@ -378,16 +378,37 @@ detail: see `PROJECT_CONTEXT.md`.
       access, per `PROJECT_CONTEXT.md`'s documented MVP policy.
       **Testing:** built test-first per route (14 tasks, one commit
       each) — 102/102 vitest tests passing (up from 60), `tsc --noEmit`
-      clean throughout. **Not verified live** — built and run in a
-      network-restricted sandbox (same `*.supabase.co` egress
-      restriction documented elsewhere in this file), so only the
-      pre-DB-call shape/auth assertions (400/401/404 paths) are proven.
-      Outstanding, to run locally against the real Dent Di project:
-      bootstrapping the first owner account (create a Supabase Auth user
-      + matching `business_members` row — needs a real password, not
-      something to invent in an automated pass) and the full 2xx-path
-      curl sequence for every route above. Tracked in Open/Non-Blocking
-      Items below.
+      clean throughout. **Partially verified live:** the owner account
+      (`owner@dentdi.lv`, `business_members.status = active`, role
+      `owner`) was bootstrapped and confirmed to exist via a direct SQL
+      read against the live project (2026-08-23) — resolving that half
+      of the outstanding item. The full 2xx-path curl/browser sequence
+      for every `/admin/*` route is still **not** verified — the real
+      owner password isn't stored or invented anywhere in an automated
+      pass, so exercising the routes as an authenticated session needs a
+      human to log in locally. Only the pre-DB-call shape/auth
+      assertions (400/401/404 paths) are proven automatically.
+
+- [x] **`apps/admin` foundation + Bookings screen built** (Astro SSR +
+      React islands, staff-facing back office). CORS added to
+      `apps/api` (`ADMIN_APP_ORIGIN`-gated, `/admin/*` only).
+      Supabase-Auth-based SSR login: `@supabase/ssr` server client,
+      middleware validates the session on every non-public request and
+      redirects to `/login` — no Hono login endpoint, the login page
+      calls `supabase-js`'s `signInWithPassword` directly. Bookings
+      screen (list + status/staff/date filters, force-book form,
+      cancel, reschedule) consumes the existing `/admin/bookings*`
+      routes through a typed fetch client (`src/lib/api/`). Plan:
+      `docs/superpowers/plans/2026-08-22-back-office-admin-ui.md`.
+      **Testing:** 13/13 vitest passing, `tsc --noEmit`/`astro check`
+      clean (2 pre-existing library-surface deprecation warnings, 0
+      errors). **Not verified live** — same reason as above: the
+      full browser flow (log in → bookings render → filter → force-book
+      → cancel → reschedule → log out) needs a human running it locally
+      with the real owner password. Deferred, not silently dropped: a
+      calendar view (list view only this pass), Patients/Catalog CRUD
+      UI, and Paytraq receipt UI — each is its own follow-up plan
+      reusing this one's auth/layout/API-client foundation.
 
 Note: schema was applied directly via the Supabase MCP server
 (`apply_migration`) against the live project, not through the originally
@@ -425,6 +446,7 @@ client #2), that's still open.
 | Rate limiting / bot protection (interim) | In-memory rate limiter + env-gated Turnstile stub (disabled by default, fails closed if enabled without a secret key) — real requirements from PROJECT_CONTEXT.md, built structurally correct now rather than skipped, but explicitly insufficient once actually deployed (no shared memory across serverless instances; no Cloudflare site key exists yet). |
 | Cancel/reschedule token model | Capability tokens, not single-use — valid until `booking.starts_at` passes or `status` becomes finalized, not gated by `used_at`. Simpler than reissuing tokens per action and correctly allows repeat reschedules. Issued at confirm time (not creation), refreshed (not reissued) on reschedule. No Turnstile on these endpoints (acting requires an unguessable 32-byte token already, so bot enumeration isn't the threat model) but `rateLimitMiddleware` still applies as cheap defense-in-depth. No `audit_log` write for patient-initiated cancel/reschedule — that table is scoped to staff manual overrides. |
 | Admin/staff data-access pattern | Admin routes use a per-request Supabase client scoped to the staff member's own JWT (anon key + Authorization forwarding), relying on existing RLS (`is_active_member()`) as the real authorization boundary — not the service-role key. `staffAuthMiddleware`'s one service-role read (`business_members` status) exists only to turn "RLS returns zero rows" into a clean 401/403. |
+| Back-office UI stack | Astro (`output: "server"`) + React islands (`client:load`) + Tailwind v4 via `@tailwindcss/vite`, `apps/admin`. SSR auth via `@supabase/ssr` — Astro middleware checks the session on every request and redirects to `/login`, rather than a client-side-only check. Distinct neutral admin visual theme (Tailwind defaults), not the public-site's sage/cream/Georgia-serif brand — reserved for the future public marketing site. |
 
 ## Open / Non-Blocking Items
 
@@ -460,18 +482,22 @@ client #2), that's still open.
   backend built" above: `GET /admin/me`; bookings list/force-book/
   cancel/reschedule; patients list/detail/edit; service_categories,
   services, staff CRUD + staff_services linking; business_hours;
-  closures) but **not yet live-verified.** Two things need to run
-  locally against the real Dent Di project, outside this sandbox's
-  network restriction:
-  1. Bootstrap the first owner account — create a Supabase Auth user via
-     the Admin API with a real password (not something an automated
-     pass should invent) and the matching `business_members` row, then
-     grab a session token.
-  2. Using that token, run the 2xx-path curl sequence for every route
-     above (documented per-task in
+  closures) plus the `apps/admin` UI consuming it (bookings screen —
+  list/filter/force-book/cancel/reschedule). **Owner account bootstrap
+  is done and confirmed live** (2026-08-23 — `owner@dentdi.lv`,
+  `business_members.status = active`, role `owner`, verified via a
+  direct SQL read). **Still outstanding, needs a human running it
+  locally with the real owner password:**
+  1. The full 2xx-path curl sequence for every `/admin/*` route
+     (documented per-task in
      `docs/superpowers/plans/2026-08-22-staff-admin-backend.md`, Task
-     17's verification table) and confirm each writes the expected
+     17's verification table), confirming each writes the expected
      `audit_log` row where applicable.
+  2. The full browser flow through `apps/admin` (log in → bookings
+     render with live seeded data → filter → force-book → cancel →
+     reschedule → log out), per
+     `docs/superpowers/plans/2026-08-22-back-office-admin-ui.md` Task
+     14.
 
 ## Working Agreement
 
