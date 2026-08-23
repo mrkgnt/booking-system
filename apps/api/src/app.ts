@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { env } from "./config/env.js";
 import { healthRoute } from "./routes/health.js";
 import { smokeRoute } from "./routes/_smoke.js";
 import { availabilityRoute } from "./routes/availability.js";
@@ -16,6 +18,15 @@ import { adminClosuresRoute } from "./routes/admin-closures.js";
 // here. Local dev wraps this in src/index.ts; a Workers/Vercel entry later
 // would be a small additive file using app.fetch, not a rewrite of this.
 export const app = new Hono();
+
+app.use(
+  "/admin/*",
+  cors({
+    origin: env.ADMIN_APP_ORIGIN,
+    allowHeaders: ["Content-Type", "Authorization", "X-Tenant-Slug"],
+    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  }),
+);
 
 app.route("/", healthRoute);
 app.route("/", smokeRoute);

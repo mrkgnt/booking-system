@@ -1,0 +1,50 @@
+---
+import "../styles/global.css";
+interface Props { title: string }
+const { title } = Astro.props;
+const navItems = [
+  { href: "/bookings", label: "Bookings", enabled: true },
+  { href: "/patients", label: "Patients", enabled: false },
+  { href: "/catalog", label: "Catalog", enabled: false },
+  { href: "/scheduling", label: "Scheduling", enabled: false },
+];
+const currentPath = Astro.url.pathname;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} — Dent Di Back Office</title>
+  </head>
+  <body class="min-h-screen bg-gray-50 text-gray-900 antialiased">
+    <div class="flex min-h-screen">
+      <nav class="w-56 shrink-0 border-r border-gray-200 bg-white p-4">
+        <p class="mb-6 text-sm font-semibold uppercase tracking-wide text-gray-400">Dent Di</p>
+        <ul class="space-y-1">
+          {navItems.map((item) => (
+            <li>
+              {item.enabled ? (
+                <a href={item.href}
+                   class={`block rounded px-3 py-2 text-sm font-medium ${currentPath.startsWith(item.href) ? "bg-gray-900 text-white" : "text-gray-700 hover:bg-gray-100"}`}>
+                  {item.label}
+                </a>
+              ) : (
+                <span class="block cursor-not-allowed rounded px-3 py-2 text-sm text-gray-300">
+                  {item.label} <span class="text-xs">(soon)</span>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+        <form method="POST" action="/api/auth/logout" class="mt-8">
+          <button type="submit" class="text-sm text-gray-500 hover:text-gray-800">Log out</button>
+        </form>
+      </nav>
+      <main class="flex-1 p-8">
+        <h1 class="mb-6 text-xl font-semibold">{title}</h1>
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>

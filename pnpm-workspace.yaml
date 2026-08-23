@@ -4,5 +4,11 @@ packages:
 # esbuild's postinstall (used transitively by vitest) needs its build
 # script allow-listed explicitly — pnpm blocks dependency build scripts by
 # default as a supply-chain safety measure.
+#
+# sharp (astro's image-processing dependency, pulled in via apps/admin)
+# needs the same allow-listing for its native-binary postinstall — without
+# it, `pnpm install`/`pnpm dev` fail outright with ERR_PNPM_IGNORED_BUILDS
+# rather than just skipping optimization silently.
 allowBuilds:
   esbuild: true
+  sharp: true

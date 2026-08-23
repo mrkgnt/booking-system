@@ -1,0 +1,16 @@
+---
+import AdminLayout from "../layouts/AdminLayout.astro";
+import BookingsScreen from "../components/BookingsScreen.tsx";
+import { listServices, listStaff } from "../lib/api/catalog.js";
+
+const session = Astro.locals.session!;
+const apiConfig = {
+  baseUrl: import.meta.env.API_BASE_URL,
+  tenantSlug: import.meta.env.TENANT_SLUG,
+  accessToken: session.accessToken,
+};
+const [services, staff] = await Promise.all([listServices(apiConfig), listStaff(apiConfig)]);
+---
+<AdminLayout title="Bookings">
+  <BookingsScreen client:load apiConfig={apiConfig} services={services} staff={staff} />
+</AdminLayout>
