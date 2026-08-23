@@ -8,6 +8,12 @@ dist/
 .vercel/
 .wrangler/
 
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
 # Astro
 .astro/
 

@@ -53,6 +53,14 @@ export const staffAuthMiddleware: MiddlewareHandler<{
 
   const roleKey = (member?.roles as { key: string } | null)?.key;
   if (!member || member.status !== "active" || !roleKey) {
+    // Logged server-side (not just returned to the client) since a denial
+    // here means either a real access-control event or a data-integrity
+    // gap (e.g. an auth user with no matching business_members row) —
+    // both worth being able to trace after the fact.
+    console.warn("staffAuthMiddleware: denied — no active membership", {
+      userId: userData.user.id,
+      path: c.req.path,
+    });
     return c.json({ error: "not_authorized" }, 403);
   }
 

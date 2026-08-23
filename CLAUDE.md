@@ -138,23 +138,24 @@ detail: see `PROJECT_CONTEXT.md`.
         `services`/`staff` CRUD + `staff_services` linking (translated
         fields via shared `src/lib/translations.ts`); `business_hours`;
         `closures`. Manual overrides write one `audit_log` row each.
-      - 102/102 vitest passing. **Verified live for a subset of
-        routes** (2026-08-23): `GET /admin/me`, `GET /admin/bookings`,
-        `GET /admin/services` all return `200` against the real
-        project using a real Supabase Auth session token.
-        **Owner account note:** the account bootstrapped earlier the
-        same day had been deleted and recreated with a new
+      - 102/102 vitest passing. **Verified live** (2026-08-23):
+        `GET /admin/me`, `/admin/bookings`, `/admin/services`,
+        `/admin/staff` all `200` via curl with a real session token;
+        bookings force-book/reschedule/cancel additionally verified
+        end-to-end via the real browser (see the Playwright entry
+        below). **Owner account note:** the account bootstrapped
+        earlier the same day had been deleted and recreated with a new
         `auth.users.id` (`...27fa`) by the time login was attempted —
         its `business_members` row was never recreated to match, so
         Supabase Auth accepted the login (200) while
         `staffAuthMiddleware` correctly 403'd on the orphaned
         membership (exactly the "clean 401/403" behavior it's designed
         for). Fixed by re-inserting the `business_members` row
-        (`active`, role `owner`) against the current id. **Still not
-        verified:** the remaining `/admin/*` routes (force-book/
-        cancel/reschedule, patients, catalog CRUD, business-hours,
-        closures) and their `audit_log` writes — needs the full
-        2xx-path sequence run.
+        (`active`, role `owner`) against the current id.
+        `staffAuthMiddleware` now `console.warn`s on every such denial
+        (userId + path) so a real recurrence is traceable server-side.
+        **Still not verified:** patients, catalog CRUD, business-hours,
+        and closures routes' 2xx sweep, and their `audit_log` writes.
 - [x] `apps/admin` foundation + Bookings screen built (Astro SSR + React
       islands, staff-facing back office). CORS added to `apps/api`
       (`ADMIN_APP_ORIGIN`-gated, `/admin/*` only). Supabase-Auth-based
@@ -165,17 +166,37 @@ detail: see `PROJECT_CONTEXT.md`.
       `/admin/bookings*` routes via a typed fetch client
       (`src/lib/api/`). Plan:
       `docs/superpowers/plans/2026-08-22-back-office-admin-ui.md`.
-      13/13 vitest passing, `tsc --noEmit`/`astro check` clean. Hit
-      and fixed the same 403-on-login bug described above through
-      this exact login path (Supabase Auth 200, app-layer 403 on the
-      missing membership row). **Full browser click-through not yet
-      confirmed by a human** (log in → bookings render → filter →
-      force-book → cancel → reschedule → log out) — the fix is
-      verified via curl with a real session token, not yet via the
-      actual login page. Deferred, not dropped: a calendar view (list
+      13/13 vitest passing, `tsc --noEmit`/`astro check` clean.
+      **Full browser flow now confirmed** (2026-08-23, via the
+      Playwright spec below): log in → bookings render with live
+      seeded data → filter → force-book → reschedule → cancel → log
+      out → redirect guard holds. One transient `403` was hit on the
+      very first cold login attempt (root cause below) and hasn't
+      recurred across 8+ direct requests and 2 full browser runs since
+      — treated as resolved, not as proven-non-recurring. Deferred, not
+      dropped: a calendar view (list
       view only this pass), Patients/Catalog CRUD UI, and Paytraq
       receipt UI — each its own follow-up plan reusing this
       foundation.
+- [x] **Playwright E2E added to `apps/admin`** (`@playwright/test`,
+      `playwright.config.ts`, `e2e/`). Deliberately doesn't manage
+      servers itself — assumes `apps/api` + `apps/admin` are already
+      running locally against the real Dent Di project, since these
+      specs exercise live data rather than mocks or a throwaway
+      instance. First spec (`e2e/login-and-bookings.spec.ts`) covers
+      exactly the Task 14 manual-verification checklist: login →
+      bookings render → filter → force-book → reschedule → cancel →
+      log out → redirect guard. Credentials come from
+      `E2E_OWNER_EMAIL`/`E2E_OWNER_PASSWORD` env vars, never hardcoded;
+      the spec `test.skip`s (not fails) when they're unset, so a bare
+      `pnpm exec playwright test` doesn't hang in an unconfigured
+      environment. Run: `E2E_OWNER_EMAIL=... E2E_OWNER_PASSWORD=...
+      pnpm --filter @booking-system/admin test:e2e`. **Verified**: full
+      spec passing (3.4s) against the live project. `chromium` only
+      for now (no cross-browser matrix — one browser is enough signal
+      at this stage; revisit if/when Safari-specific bugs actually
+      surface). No CI wiring yet — local-only until hosting is decided.
+
 ## Decisions Log (running — append, don't rewrite history)
 
 | Area | Decision |
@@ -192,7 +213,7 @@ detail: see `PROJECT_CONTEXT.md`.
 | Post-launch priority order | 1. Paytraq → 2. configurable booking-form fields → 3. calendar sync |
 | Backend/API pattern | Hono, serverless, single deployment |
 | Database architecture | One Supabase project per client |
-| Dev/testing approach | No UI yet — curl/Postman. Faker seed script; purge before real release |
+| Dev/testing approach | Faker seed script; purge before real release. `apps/api` unit tests via vitest; `apps/admin` unit tests via vitest + browser E2E via Playwright (`apps/admin/e2e/`), run locally against the real dev servers + live Supabase project — no mocked backend for E2E, since the point is proving the real integration works |
 | GDPR / data residency | Supabase project region must be explicit EU (e.g. Frankfurt) |
 | Backend hosting | **Open** — Cloudflare Workers vs. Vercel not yet decided |
 | SMS provider | **Open** — not yet chosen (Twilio vs. EU-based alternative) |
@@ -237,34 +258,26 @@ detail: see `PROJECT_CONTEXT.md`.
 - End-to-end curl verification of the cancel/reschedule flow needs to run
   locally with the real `DENTDI_SUPABASE_SECRET_KEY` — same sandbox
   network restriction as the rest of the booking flow.
-- Admin-side booking management is now **built** (see "Staff/admin
-  backend built" above: `GET /admin/me`; bookings list/force-book/
-  cancel/reschedule; patients list/detail/edit; service_categories,
-  services, staff CRUD + staff_services linking; business_hours;
-  closures) plus the `apps/admin` UI consuming it (bookings screen —
-  list/filter/force-book/cancel/reschedule). **Owner account status**
-  (2026-08-23): the account was deleted and recreated at some point
-  after the original bootstrap (new `auth.users.id`, ending `...27fa`,
-  `created_at` 2026-08-23 10:40 UTC) — its `business_members` row went
-  with it and was never recreated, which is what caused a `403` on
-  login (Supabase Auth accepted the password fine; the app-layer
-  membership check correctly rejected the orphaned session). Fixed by
-  re-inserting `business_members` (`active`, role `owner`) against the
-  current id. `GET /admin/me`, `/admin/bookings`, `/admin/services`
-  confirmed `200` live with a real session token obtained via the
-  Supabase password grant. **Still outstanding:**
-  1. The full 2xx-path curl sequence for the remaining `/admin/*`
-     routes (documented per-task in
-     `docs/superpowers/plans/2026-08-22-staff-admin-backend.md`, Task
-     17's verification table), confirming each writes the expected
-     `audit_log` row where applicable.
-  2. A human confirming the full browser flow through `apps/admin`
-     (log in → bookings render with live seeded data → filter →
-     force-book → cancel → reschedule → log out) actually works via
-     the real login page — the fix above is verified via curl, not
-     yet via a live browser session — per
-     `docs/superpowers/plans/2026-08-22-back-office-admin-ui.md` Task
-     14.
+- Admin-side booking management is now **built and browser-verified**
+  (see "Staff/admin backend built" and "apps/admin foundation" above).
+  **Owner account status** (2026-08-23): the account was deleted and
+  recreated at some point after the original bootstrap (new
+  `auth.users.id`, ending `...27fa`, `created_at` 2026-08-23 10:40
+  UTC) — its `business_members` row went with it and was never
+  recreated, which is what caused a `403` on login (Supabase Auth
+  accepted the password fine; the app-layer membership check correctly
+  rejected the orphaned session). Fixed by re-inserting
+  `business_members` (`active`, role `owner`) against the current id.
+  The full login → bookings → force-book → reschedule → cancel →
+  log out flow is now confirmed via an automated Playwright spec
+  (`apps/admin/e2e/login-and-bookings.spec.ts`), not just curl.
+  **Still outstanding:** the full 2xx-path curl sequence for the
+  remaining `/admin/*` routes not covered by that spec — patients,
+  catalog CRUD (`service_categories`/`services`/`staff`), staff↔service
+  linking, business-hours, closures (documented per-task in
+  `docs/superpowers/plans/2026-08-22-staff-admin-backend.md`, Task
+  17's verification table), confirming each writes the expected
+  `audit_log` row where applicable.
 
 ## Working Agreement
 
