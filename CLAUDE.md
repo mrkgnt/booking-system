@@ -138,12 +138,23 @@ detail: see `PROJECT_CONTEXT.md`.
         `services`/`staff` CRUD + `staff_services` linking (translated
         fields via shared `src/lib/translations.ts`); `business_hours`;
         `closures`. Manual overrides write one `audit_log` row each.
-      - 102/102 vitest passing. **Partially verified live:** the owner
-        account (`owner@dentdi.lv`, `business_members.status = active`,
-        role `owner`) was bootstrapped and confirmed via a direct SQL
-        read against the live project (2026-08-23). The full 2xx-path
-        curl/browser sequence for every route is still not verified —
-        needs a human to log in locally with the real owner password.
+      - 102/102 vitest passing. **Verified live for a subset of
+        routes** (2026-08-23): `GET /admin/me`, `GET /admin/bookings`,
+        `GET /admin/services` all return `200` against the real
+        project using a real Supabase Auth session token.
+        **Owner account note:** the account bootstrapped earlier the
+        same day had been deleted and recreated with a new
+        `auth.users.id` (`...27fa`) by the time login was attempted —
+        its `business_members` row was never recreated to match, so
+        Supabase Auth accepted the login (200) while
+        `staffAuthMiddleware` correctly 403'd on the orphaned
+        membership (exactly the "clean 401/403" behavior it's designed
+        for). Fixed by re-inserting the `business_members` row
+        (`active`, role `owner`) against the current id. **Still not
+        verified:** the remaining `/admin/*` routes (force-book/
+        cancel/reschedule, patients, catalog CRUD, business-hours,
+        closures) and their `audit_log` writes — needs the full
+        2xx-path sequence run.
 - [x] `apps/admin` foundation + Bookings screen built (Astro SSR + React
       islands, staff-facing back office). CORS added to `apps/api`
       (`ADMIN_APP_ORIGIN`-gated, `/admin/*` only). Supabase-Auth-based
@@ -154,11 +165,17 @@ detail: see `PROJECT_CONTEXT.md`.
       `/admin/bookings*` routes via a typed fetch client
       (`src/lib/api/`). Plan:
       `docs/superpowers/plans/2026-08-22-back-office-admin-ui.md`.
-      13/13 vitest passing, `tsc --noEmit`/`astro check` clean. **Not
-      verified live** — same reason as above. Deferred, not dropped: a
-      calendar view (list view only this pass), Patients/Catalog CRUD
-      UI, and Paytraq receipt UI — each its own follow-up plan reusing
-      this foundation.
+      13/13 vitest passing, `tsc --noEmit`/`astro check` clean. Hit
+      and fixed the same 403-on-login bug described above through
+      this exact login path (Supabase Auth 200, app-layer 403 on the
+      missing membership row). **Full browser click-through not yet
+      confirmed by a human** (log in → bookings render → filter →
+      force-book → cancel → reschedule → log out) — the fix is
+      verified via curl with a real session token, not yet via the
+      actual login page. Deferred, not dropped: a calendar view (list
+      view only this pass), Patients/Catalog CRUD UI, and Paytraq
+      receipt UI — each its own follow-up plan reusing this
+      foundation.
 ## Decisions Log (running — append, don't rewrite history)
 
 | Area | Decision |
@@ -225,19 +242,27 @@ detail: see `PROJECT_CONTEXT.md`.
   cancel/reschedule; patients list/detail/edit; service_categories,
   services, staff CRUD + staff_services linking; business_hours;
   closures) plus the `apps/admin` UI consuming it (bookings screen —
-  list/filter/force-book/cancel/reschedule). **Owner account bootstrap
-  is done and confirmed live** (2026-08-23 — `owner@dentdi.lv`,
-  `business_members.status = active`, role `owner`, verified via a
-  direct SQL read). **Still outstanding, needs a human running it
-  locally with the real owner password:**
-  1. The full 2xx-path curl sequence for every `/admin/*` route
-     (documented per-task in
+  list/filter/force-book/cancel/reschedule). **Owner account status**
+  (2026-08-23): the account was deleted and recreated at some point
+  after the original bootstrap (new `auth.users.id`, ending `...27fa`,
+  `created_at` 2026-08-23 10:40 UTC) — its `business_members` row went
+  with it and was never recreated, which is what caused a `403` on
+  login (Supabase Auth accepted the password fine; the app-layer
+  membership check correctly rejected the orphaned session). Fixed by
+  re-inserting `business_members` (`active`, role `owner`) against the
+  current id. `GET /admin/me`, `/admin/bookings`, `/admin/services`
+  confirmed `200` live with a real session token obtained via the
+  Supabase password grant. **Still outstanding:**
+  1. The full 2xx-path curl sequence for the remaining `/admin/*`
+     routes (documented per-task in
      `docs/superpowers/plans/2026-08-22-staff-admin-backend.md`, Task
      17's verification table), confirming each writes the expected
      `audit_log` row where applicable.
-  2. The full browser flow through `apps/admin` (log in → bookings
-     render with live seeded data → filter → force-book → cancel →
-     reschedule → log out), per
+  2. A human confirming the full browser flow through `apps/admin`
+     (log in → bookings render with live seeded data → filter →
+     force-book → cancel → reschedule → log out) actually works via
+     the real login page — the fix above is verified via curl, not
+     yet via a live browser session — per
      `docs/superpowers/plans/2026-08-22-back-office-admin-ui.md` Task
      14.
 
