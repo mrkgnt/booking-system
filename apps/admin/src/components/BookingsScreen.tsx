@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import type { ApiClientConfig } from "../lib/api/client.js";
-import { cancelBooking, forceBookBooking, listBookings, type Booking, type BookingStatus, type ListBookingsFilters } from "../lib/api/bookings.js";
+import { cancelBooking, forceBookBooking, listBookings, rescheduleBooking, type Booking, type BookingStatus, type ListBookingsFilters } from "../lib/api/bookings.js";
 import type { Service, StaffMember } from "../lib/api/catalog.js";
 import { describeApiError } from "../lib/api/errors.js";
 import { validateForceBookForm, type ForceBookFormValues } from "../lib/api/validate-force-book.js";
-import { formatBookingTime } from "../lib/format.js";
+import { formatBookingTime, toDatetimeLocalValue } from "../lib/format.js";
 
 const STATUSES: BookingStatus[] = ["pending_verification", "confirmed", "completed", "cancelled", "no_show"];
 
@@ -43,6 +43,19 @@ export default function BookingsScreen({ apiConfig, services, staff }: Props) {
     if (!window.confirm("Cancel this booking?")) return;
     try {
       await cancelBooking(apiConfig, bookingId);
+      await refresh();
+    } catch (err) {
+      setError(describeApiError(err));
+    }
+  }
+
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [newStartsAt, setNewStartsAt] = useState("");
+
+  async function handleReschedule(bookingId: string) {
+    try {
+      await rescheduleBooking(apiConfig, bookingId, new Date(newStartsAt).toISOString());
+      setReschedulingId(null);
       await refresh();
     } catch (err) {
       setError(describeApiError(err));
@@ -107,7 +120,19 @@ export default function BookingsScreen({ apiConfig, services, staff }: Props) {
                 <td>{b.source}</td>
                 <td>
                   {!["cancelled", "completed", "no_show"].includes(b.status) && (
-                    <button className="text-sm text-red-600 hover:underline" onClick={() => handleCancel(b.id)}>Cancel</button>
+                    <>
+                      <button className="text-sm text-red-600 hover:underline" onClick={() => handleCancel(b.id)}>Cancel</button>{" "}
+                      <button className="text-sm text-blue-600 hover:underline"
+                        onClick={() => { setReschedulingId(b.id); setNewStartsAt(toDatetimeLocalValue(b.starts_at)); }}>
+                        Reschedule
+                      </button>
+                      {reschedulingId === b.id && (
+                        <span className="ml-2 inline-flex gap-2">
+                          <input type="datetime-local" value={newStartsAt} onChange={(e) => setNewStartsAt(e.target.value)} />
+                          <button className="text-sm text-gray-900" onClick={() => handleReschedule(b.id)}>Save</button>
+                        </span>
+                      )}
+                    </>
                   )}
                 </td>
               </tr>
