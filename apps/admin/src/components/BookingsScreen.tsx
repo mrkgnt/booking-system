@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ApiClientConfig } from "../lib/api/client.js";
-import { forceBookBooking, listBookings, type Booking, type BookingStatus, type ListBookingsFilters } from "../lib/api/bookings.js";
+import { cancelBooking, forceBookBooking, listBookings, type Booking, type BookingStatus, type ListBookingsFilters } from "../lib/api/bookings.js";
 import type { Service, StaffMember } from "../lib/api/catalog.js";
 import { describeApiError } from "../lib/api/errors.js";
 import { validateForceBookForm, type ForceBookFormValues } from "../lib/api/validate-force-book.js";
@@ -36,6 +36,16 @@ export default function BookingsScreen({ apiConfig, services, staff }: Props) {
       await refresh();
     } catch (err) {
       setFormErrors([describeApiError(err)]);
+    }
+  }
+
+  async function handleCancel(bookingId: string) {
+    if (!window.confirm("Cancel this booking?")) return;
+    try {
+      await cancelBooking(apiConfig, bookingId);
+      await refresh();
+    } catch (err) {
+      setError(describeApiError(err));
     }
   }
 
@@ -95,7 +105,11 @@ export default function BookingsScreen({ apiConfig, services, staff }: Props) {
                 <td>{b.status}</td>
                 <td>{staff.find((s) => s.id === b.staff_id)?.name ?? "—"}</td>
                 <td>{b.source}</td>
-                <td>{/* cancel/reschedule row actions land here in Tasks 12–13 */}</td>
+                <td>
+                  {!["cancelled", "completed", "no_show"].includes(b.status) && (
+                    <button className="text-sm text-red-600 hover:underline" onClick={() => handleCancel(b.id)}>Cancel</button>
+                  )}
+                </td>
               </tr>
             ))}
             {bookings.length === 0 && <tr><td colSpan={5} className="py-4 text-gray-400">No bookings match these filters.</td></tr>}
