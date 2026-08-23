@@ -20,7 +20,7 @@ smokeRoute.get("/_smoke/business-profile", tenantMiddleware, async (c) => {
 
   const { data, error } = await supabase
     .from("business_profile")
-    .select("id, slug, default_locale, timezone")
+    .select("slug, default_locale, timezone")
     .limit(1)
     .single();
 
