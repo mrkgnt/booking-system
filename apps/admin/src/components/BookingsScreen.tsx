@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import type { ApiClientConfig } from "../lib/api/client.js";
-import { listBookings, type Booking, type BookingStatus, type ListBookingsFilters } from "../lib/api/bookings.js";
+import { forceBookBooking, listBookings, type Booking, type BookingStatus, type ListBookingsFilters } from "../lib/api/bookings.js";
 import type { Service, StaffMember } from "../lib/api/catalog.js";
 import { describeApiError } from "../lib/api/errors.js";
+import { validateForceBookForm, type ForceBookFormValues } from "../lib/api/validate-force-book.js";
 import { formatBookingTime } from "../lib/format.js";
 
 const STATUSES: BookingStatus[] = ["pending_verification", "confirmed", "completed", "cancelled", "no_show"];
@@ -14,6 +15,29 @@ export default function BookingsScreen({ apiConfig, services, staff }: Props) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [formValues, setFormValues] = useState<ForceBookFormValues>({
+    serviceId: "", staffId: "", startsAt: "", locale: "lv", patientName: "", patientEmail: "", patientPhone: "",
+  });
+  const [formErrors, setFormErrors] = useState<string[]>([]);
+
+  async function handleForceBook(e: React.FormEvent) {
+    e.preventDefault();
+    const errors = validateForceBookForm(formValues);
+    setFormErrors(errors);
+    if (errors.length > 0) return;
+    try {
+      await forceBookBooking(apiConfig, {
+        serviceId: formValues.serviceId, staffId: formValues.staffId,
+        startsAt: new Date(formValues.startsAt).toISOString(), locale: formValues.locale as "lv" | "ru" | "en",
+        patient: { name: formValues.patientName, email: formValues.patientEmail || undefined, phone: formValues.patientPhone || undefined },
+      });
+      setShowForm(false);
+      await refresh();
+    } catch (err) {
+      setFormErrors([describeApiError(err)]);
+    }
+  }
 
   async function refresh() {
     setLoading(true);
@@ -78,7 +102,27 @@ export default function BookingsScreen({ apiConfig, services, staff }: Props) {
           </tbody>
         </table>
       )}
-      {/* Force-book "New booking" toggle lands here in Task 11 */}
+      <button className="rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white" onClick={() => setShowForm((v) => !v)}>
+        {showForm ? "Cancel" : "New booking"}
+      </button>
+      {showForm && (
+        <form onSubmit={handleForceBook} className="space-y-3 rounded border border-gray-200 bg-white p-4">
+          {formErrors.map((msg) => <p key={msg} className="text-sm text-red-700">{msg}</p>)}
+          <select value={formValues.serviceId} onChange={(e) => setFormValues((v) => ({ ...v, serviceId: e.target.value }))}>
+            <option value="">Select service</option>
+            {services.map((s) => <option key={s.id} value={s.id}>{s.name.lv ?? Object.values(s.name)[0]}</option>)}
+          </select>
+          <select value={formValues.staffId} onChange={(e) => setFormValues((v) => ({ ...v, staffId: e.target.value }))}>
+            <option value="">Select staff</option>
+            {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <input type="datetime-local" value={formValues.startsAt} onChange={(e) => setFormValues((v) => ({ ...v, startsAt: e.target.value }))} />
+          <input placeholder="Patient name" value={formValues.patientName} onChange={(e) => setFormValues((v) => ({ ...v, patientName: e.target.value }))} />
+          <input placeholder="Email" value={formValues.patientEmail} onChange={(e) => setFormValues((v) => ({ ...v, patientEmail: e.target.value }))} />
+          <input placeholder="Phone" value={formValues.patientPhone} onChange={(e) => setFormValues((v) => ({ ...v, patientPhone: e.target.value }))} />
+          <button type="submit" className="rounded bg-gray-900 px-3 py-2 text-sm text-white">Book</button>
+        </form>
+      )}
     </div>
   );
 }
