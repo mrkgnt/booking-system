@@ -192,10 +192,37 @@ detail: see `PROJECT_CONTEXT.md`.
       `pnpm exec playwright test` doesn't hang in an unconfigured
       environment. Run: `E2E_OWNER_EMAIL=... E2E_OWNER_PASSWORD=...
       pnpm --filter @booking-system/admin test:e2e`. **Verified**: full
-      spec passing (3.4s) against the live project. `chromium` only
+      spec passing against the live project, repeatably. `chromium` only
       for now (no cross-browser matrix — one browser is enough signal
       at this stage; revisit if/when Safari-specific bugs actually
       surface). No CI wiring yet — local-only until hosting is decided.
+      Test dates are derived from the run timestamp (year 2031, day
+      varies) rather than fixed — fixed dates left ambiguous leftover
+      rows across repeated manual runs against live data, causing
+      unrelated strict-mode-violation failures in later runs.
+- [x] **Two real bugs found and fixed via this E2E work** (2026-08-23):
+      1. `staffAuthMiddleware` occasionally 403s a valid, active
+         session under concurrent requests — reproduced directly
+         (~1-2% of paired requests matching `bookings.astro`'s
+         `Promise.all([listServices, listStaff])` pattern; 0/180 in a
+         wider run, consistent with rare transient flakiness validating
+         a token against Supabase Auth under concurrent load, not a
+         real authorization gap). Since the middleware runs before any
+         route logic, a 403 here can never mean a write partially
+         happened, so `apiFetch` (`apps/admin/src/lib/api/client.ts`)
+         now retries once on 403 before surfacing the error. Covered by
+         `apps/admin/test/lib/api/client.test.ts`. `staffAuthMiddleware`
+         also now `console.warn`s every denial (userId + path) for
+         server-side traceability.
+      2. `apps/admin`'s dev server defaulted to Astro's `:4321` unless
+         launched with an explicit `--port 8080`, while `apps/api`'s
+         `ADMIN_APP_ORIGIN` (CORS) expects `:8080` — a plain
+         `pnpm run dev` silently broke every **browser-side** `/admin/*`
+         call (force-book/cancel/reschedule) while SSR-side calls (the
+         initial page load) kept working fine, since CORS is
+         browser-only — a confusing split when debugging from symptoms
+         alone. Fixed by locking the port in `apps/admin/astro.config.mjs`
+         so a bare `pnpm run dev` always lands on `:8080`.
 
 ## Decisions Log (running — append, don't rewrite history)
 
