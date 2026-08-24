@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ApiClientConfig } from "../lib/api/client.js";
 import { listPatients, type Patient } from "../lib/api/patients.js";
 import { describeApiError } from "../lib/api/errors.js";
@@ -11,8 +11,13 @@ export default function PatientsScreen({ apiConfig, patients: initialPatients }:
   const [patients, setPatients] = useState<Patient[]>(initialPatients);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const skippedInitialFetch = useRef(false);
 
   useEffect(() => {
+    if (!skippedInitialFetch.current && query === "") {
+      skippedInitialFetch.current = true;
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);

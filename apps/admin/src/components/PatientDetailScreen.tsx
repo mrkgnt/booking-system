@@ -20,7 +20,12 @@ export default function PatientDetailScreen({ apiConfig, patient, bookings }: Pr
     setSaving(true);
     setError(null);
     try {
-      await updatePatient(apiConfig, patient.id, { name, email, phone, notes });
+      await updatePatient(apiConfig, patient.id, {
+        name,
+        email: email || undefined,
+        phone: phone || undefined,
+        notes: notes || undefined,
+      });
     } catch (err) {
       setError(describeApiError(err));
     } finally {
