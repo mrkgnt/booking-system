@@ -24,7 +24,7 @@ export default function PatientDetailScreen({ apiConfig, patient, bookings }: Pr
         name,
         email: email || undefined,
         phone: phone || undefined,
-        notes: notes || undefined,
+        notes,
       });
     } catch (err) {
       setError(describeApiError(err));
