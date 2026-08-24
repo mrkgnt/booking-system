@@ -1,0 +1,16 @@
+---
+import AdminLayout from "../layouts/AdminLayout.astro";
+import CatalogScreen from "../components/CatalogScreen.tsx";
+import { listServiceCategories } from "../lib/api/service-categories.js";
+
+const session = Astro.locals.session!;
+const apiConfig = {
+  baseUrl: import.meta.env.API_BASE_URL,
+  tenantSlug: import.meta.env.TENANT_SLUG,
+  accessToken: session.accessToken,
+};
+const categories = await listServiceCategories(apiConfig);
+---
+<AdminLayout title="Catalog">
+  <CatalogScreen client:load apiConfig={apiConfig} categories={categories} />
+</AdminLayout>
