@@ -1,23 +1,10 @@
 import { test, expect } from "@playwright/test";
+import { login, OWNER_EMAIL, OWNER_PASSWORD, skipIfNoCreds } from "./helpers.js";
 
-// Exercises the real Dent Di Supabase project (see CLAUDE.md) — needs
-// apps/api and apps/admin already running, and real owner credentials.
-// Skips (not fails) when credentials aren't provided, so a bare
-// `pnpm exec playwright test` in an unconfigured environment doesn't hang.
-const email = process.env.E2E_OWNER_EMAIL;
-const password = process.env.E2E_OWNER_PASSWORD;
-
-test.skip(!email || !password, "E2E_OWNER_EMAIL / E2E_OWNER_PASSWORD not set");
+test.skip(skipIfNoCreds, "E2E_OWNER_EMAIL / E2E_OWNER_PASSWORD not set");
 
 test("login, view bookings, force-book, cancel, reschedule, log out", async ({ page }) => {
-  await page.goto("/");
-  await expect(page).toHaveURL(/\/login$/);
-
-  await page.getByLabel("Email").fill(email!);
-  await page.getByLabel("Password").fill(password!);
-  await page.getByRole("button", { name: "Log in" }).click();
-
-  await expect(page).toHaveURL(/\/bookings$/);
+  await login(page, OWNER_EMAIL!, OWNER_PASSWORD!);
   await expect(page.getByRole("table")).toBeVisible();
 
   // Filter by staff, then reset — proves the filter round-trips without error.
