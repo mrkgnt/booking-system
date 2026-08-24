@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import type { ApiClientConfig } from "../lib/api/client.js";
 import { listServiceCategories, type ServiceCategory } from "../lib/api/service-categories.js";
-import { listServices, type Service } from "../lib/api/catalog.js";
+import { listServices, listStaff, type Service, type StaffMember } from "../lib/api/catalog.js";
 import CategoriesPanel from "./catalog/CategoriesPanel.js";
 import ServicesPanel from "./catalog/ServicesPanel.js";
+import StaffPanel from "./catalog/StaffPanel.js";
 
 type Tab = "categories" | "services" | "staff";
 
@@ -13,12 +14,23 @@ export default function CatalogScreen({ apiConfig, categories }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("categories");
   const [services, setServices] = useState<Service[] | null>(null);
   const [servicesCategories, setServicesCategories] = useState<ServiceCategory[] | null>(null);
+  const [staff, setStaff] = useState<StaffMember[] | null>(null);
+  const [staffServices, setStaffServices] = useState<Service[] | null>(null);
 
   useEffect(() => {
     if (activeTab === "services" && services === null) {
       Promise.all([listServices(apiConfig), listServiceCategories(apiConfig)]).then(([s, c]) => {
         setServices(s);
         setServicesCategories(c);
+      });
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "staff" && staff === null) {
+      Promise.all([listStaff(apiConfig), listServices(apiConfig)]).then(([st, sv]) => {
+        setStaff(st);
+        setStaffServices(sv);
       });
     }
   }, [activeTab]);
@@ -50,7 +62,9 @@ export default function CatalogScreen({ apiConfig, categories }: Props) {
       {activeTab === "services" && services && servicesCategories && (
         <ServicesPanel apiConfig={apiConfig} services={services} categories={servicesCategories} />
       )}
-      {activeTab === "staff" && <div className="text-sm text-gray-500">Coming soon</div>}
+      {activeTab === "staff" && staff && staffServices && (
+        <StaffPanel apiConfig={apiConfig} staff={staff} services={staffServices} />
+      )}
     </div>
   );
 }
