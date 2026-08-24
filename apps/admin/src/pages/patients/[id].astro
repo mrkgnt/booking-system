@@ -1,0 +1,17 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import PatientDetailScreen from "../../components/PatientDetailScreen.tsx";
+import { getPatient } from "../../lib/api/patients.js";
+
+const session = Astro.locals.session!;
+const apiConfig = {
+  baseUrl: import.meta.env.API_BASE_URL,
+  tenantSlug: import.meta.env.TENANT_SLUG,
+  accessToken: session.accessToken,
+};
+const { id } = Astro.params;
+const { patient, bookings } = await getPatient(apiConfig, id!);
+---
+<AdminLayout title="Patient">
+  <PatientDetailScreen client:load apiConfig={apiConfig} patient={patient} bookings={bookings} />
+</AdminLayout>
