@@ -1,0 +1,17 @@
+---
+import AdminLayout from "../layouts/AdminLayout.astro";
+import SchedulingScreen from "../components/SchedulingScreen.tsx";
+import { listBusinessHours } from "../lib/api/business-hours.js";
+import { listStaff } from "../lib/api/catalog.js";
+
+const session = Astro.locals.session!;
+const apiConfig = {
+  baseUrl: import.meta.env.API_BASE_URL,
+  tenantSlug: import.meta.env.TENANT_SLUG,
+  accessToken: session.accessToken,
+};
+const [hours, staff] = await Promise.all([listBusinessHours(apiConfig), listStaff(apiConfig)]);
+---
+<AdminLayout title="Scheduling">
+  <SchedulingScreen client:load apiConfig={apiConfig} hours={hours} staff={staff} />
+</AdminLayout>
