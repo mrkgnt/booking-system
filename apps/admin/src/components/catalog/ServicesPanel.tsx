@@ -104,7 +104,10 @@ export default function ServicesPanel({ apiConfig, services: initialServices, ca
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const hasDescription = formValues.descLv || formValues.descRu || formValues.descEn;
+      const description = Object.fromEntries(
+        ([["lv", formValues.descLv], ["ru", formValues.descRu], ["en", formValues.descEn]] as const)
+          .filter(([, v]) => v.trim() !== ""),
+      ) as Record<"lv" | "ru" | "en", string>;
       await createService(apiConfig, {
         categoryId: formValues.categoryId || undefined,
         durationMinutes: Number(formValues.durationMinutes),
@@ -116,7 +119,7 @@ export default function ServicesPanel({ apiConfig, services: initialServices, ca
         displayOrder: Number(formValues.displayOrder),
         isActive: formValues.isActive,
         name: { lv: formValues.nameLv, ru: formValues.nameRu, en: formValues.nameEn },
-        description: hasDescription ? { lv: formValues.descLv, ru: formValues.descRu, en: formValues.descEn } : undefined,
+        description: Object.keys(description).length > 0 ? description : undefined,
       });
       setShowForm(false);
       setFormValues(EMPTY_CREATE_VALUES);
