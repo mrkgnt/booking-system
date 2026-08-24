@@ -3,6 +3,7 @@ import type { ApiClientConfig } from "../lib/api/client.js";
 import type { BusinessHour } from "../lib/api/business-hours.js";
 import type { StaffMember } from "../lib/api/catalog.js";
 import HoursPanel from "./scheduling/HoursPanel.js";
+import ClosuresPanel from "./scheduling/ClosuresPanel.js";
 
 type Tab = "hours" | "closures";
 
@@ -29,7 +30,7 @@ export default function SchedulingScreen({ apiConfig, hours, staff }: Props) {
       </div>
 
       {activeTab === "hours" && <HoursPanel apiConfig={apiConfig} hours={hours} staff={staff} />}
-      {activeTab === "closures" && <div className="text-sm text-gray-500">Coming soon</div>}
+      {activeTab === "closures" && <ClosuresPanel apiConfig={apiConfig} staff={staff} />}
     </div>
   );
 }
