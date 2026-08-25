@@ -3,6 +3,7 @@ import "../styles/global.css";
 interface Props { title: string }
 const { title } = Astro.props;
 const navItems = [
+  { href: "/dashboard", label: "Dashboard", enabled: true },
   { href: "/bookings", label: "Bookings", enabled: true },
   { href: "/patients", label: "Patients", enabled: true },
   { href: "/catalog", label: "Catalog", enabled: true },

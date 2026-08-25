@@ -1,0 +1,42 @@
+---
+import AdminLayout from "../layouts/AdminLayout.astro";
+import DashboardScreen from "../components/DashboardScreen.tsx";
+import { listStaff } from "../lib/api/catalog.js";
+import { listBookings } from "../lib/api/bookings.js";
+import { listBusinessHours } from "../lib/api/business-hours.js";
+import { listClosures } from "../lib/api/closures.js";
+import { getWeekDays, getWeekStart, toDateKey } from "../lib/dashboard/date-utils.js";
+
+const session = Astro.locals.session!;
+const apiConfig = {
+  baseUrl: import.meta.env.API_BASE_URL,
+  tenantSlug: import.meta.env.TENANT_SLUG,
+  accessToken: session.accessToken,
+};
+
+const weekStart = getWeekStart(new Date());
+const weekDays = getWeekDays(weekStart);
+const from = new Date(weekDays[0]);
+from.setHours(0, 0, 0, 0);
+const to = new Date(weekDays[6]);
+to.setHours(23, 59, 59, 999);
+
+const [staff, bookings, businessHours, closures] = await Promise.all([
+  listStaff(apiConfig),
+  listBookings(apiConfig, { from: from.toISOString(), to: to.toISOString() }),
+  listBusinessHours(apiConfig, null),
+  listClosures(apiConfig, null),
+]);
+---
+
+<AdminLayout title="Dashboard">
+  <DashboardScreen
+    client:load
+    apiConfig={apiConfig}
+    staff={staff}
+    initialWeekStartKey={toDateKey(weekStart)}
+    initialBookings={bookings}
+    initialBusinessHours={businessHours}
+    initialClosures={closures}
+  />
+</AdminLayout>

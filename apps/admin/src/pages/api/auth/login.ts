@@ -15,5 +15,5 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   if (error) {
     return redirect("/login?error=" + encodeURIComponent(error.message));
   }
-  return redirect("/bookings");
+  return redirect("/dashboard");
 };

@@ -5,6 +5,11 @@ test.skip(skipIfNoCreds, "E2E_OWNER_EMAIL / E2E_OWNER_PASSWORD not set");
 
 test("login, view bookings, force-book, cancel, reschedule, log out", async ({ page }) => {
   await login(page, OWNER_EMAIL!, OWNER_PASSWORD!);
+
+  // Login now lands on the Dashboard — navigate to Bookings via the nav
+  // link, since that's what this spec actually exercises.
+  await page.getByRole("link", { name: "Bookings" }).click();
+  await expect(page).toHaveURL(/\/bookings$/);
   await expect(page.getByRole("table")).toBeVisible();
 
   // Filter by staff, then reset — proves the filter round-trips without error.

@@ -6,6 +6,11 @@ test.skip(skipIfNoCreds, "E2E_OWNER_EMAIL / E2E_OWNER_PASSWORD not set");
 test("force-book rejects a conflicting slot with a visible error, and doesn't duplicate the booking", async ({ page }) => {
   await login(page, OWNER_EMAIL!, OWNER_PASSWORD!);
 
+  // Login now lands on the Dashboard — navigate to Bookings via the nav
+  // link, since that's what this spec actually exercises.
+  await page.getByRole("link", { name: "Bookings" }).click();
+  await expect(page).toHaveURL(/\/bookings$/);
+
   const pad = (n: number) => String(n).padStart(2, "0");
   const day = 1 + (Date.now() % 27);
   const startsAt = `2032-03-${pad(day)}T09:00`;
@@ -47,6 +52,11 @@ test("force-book rejects a conflicting slot with a visible error, and doesn't du
 
 test("force-book form blocks submission with missing patient contact info", async ({ page }) => {
   await login(page, OWNER_EMAIL!, OWNER_PASSWORD!);
+
+  // Login now lands on the Dashboard — navigate to Bookings via the nav
+  // link, since that's what this spec actually exercises.
+  await page.getByRole("link", { name: "Bookings" }).click();
+  await expect(page).toHaveURL(/\/bookings$/);
 
   await page.getByRole("button", { name: "New booking" }).click();
   await page.getByRole("combobox").nth(2).selectOption({ index: 1 });
