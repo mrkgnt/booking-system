@@ -27,9 +27,18 @@ function buildRows(hours: BusinessHour[]): Row[] {
   });
 }
 
+// A staff scope with zero fetched rows means "no per-staff override exists —
+// this staff member inherits business-wide hours", which must stay visually
+// distinct from a deliberate "closed every day" override. Business-wide scope
+// (scopeId === "") has no such inherited state, so it's never ambiguous.
+function computeInheriting(scopeId: string, hours: BusinessHour[]): boolean {
+  return scopeId !== "" && hours.length === 0;
+}
+
 export default function HoursPanel({ apiConfig, hours: initialHours, staff }: Props) {
   const [scopeId, setScopeId] = useState("");
   const [rows, setRows] = useState<Row[]>(buildRows(initialHours));
+  const [inheriting, setInheriting] = useState(() => computeInheriting("", initialHours));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +50,16 @@ export default function HoursPanel({ apiConfig, hours: initialHours, staff }: Pr
     try {
       const hours = await listBusinessHours(apiConfig, value || null);
       setRows(buildRows(hours));
+      setInheriting(computeInheriting(value, hours));
     } catch (err) {
       setError(describeApiError(err));
     } finally {
       setLoading(false);
     }
+  }
+
+  function startCustomHours() {
+    setInheriting(false);
   }
 
   function updateRow(dayOfWeek: number, patch: Partial<Row>) {
@@ -64,6 +78,7 @@ export default function HoursPanel({ apiConfig, hours: initialHours, staff }: Pr
       }));
       const saved = await replaceBusinessHours(apiConfig, scopeId || null, hours);
       setRows(buildRows(saved));
+      setInheriting(computeInheriting(scopeId, saved));
     } catch (err) {
       setError(describeApiError(err));
     } finally {
@@ -85,6 +100,18 @@ export default function HoursPanel({ apiConfig, hours: initialHours, staff }: Pr
       {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {loading ? (
         <p className="text-sm text-gray-500">Loading…</p>
+      ) : inheriting ? (
+        <div className="space-y-3 rounded border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-medium text-amber-800">
+            No staff-specific schedule — currently inheriting business hours.
+          </p>
+          <button
+            className="rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+            onClick={startCustomHours}
+          >
+            Set custom hours for this staff member
+          </button>
+        </div>
       ) : (
         <table className="w-full text-left text-sm">
           <thead>
@@ -127,13 +154,15 @@ export default function HoursPanel({ apiConfig, hours: initialHours, staff }: Pr
         </table>
       )}
 
-      <button
-        className="rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white"
-        onClick={handleSave}
-        disabled={saving}
-      >
-        Save hours
-      </button>
+      {!loading && !inheriting && (
+        <button
+          className="rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          Save hours
+        </button>
+      )}
     </div>
   );
 }

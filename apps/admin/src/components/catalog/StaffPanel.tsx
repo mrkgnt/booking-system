@@ -11,7 +11,12 @@ import {
 } from "../../lib/api/catalog.js";
 import { describeApiError } from "../../lib/api/errors.js";
 
-type Props = { apiConfig: ApiClientConfig; staff: StaffMember[]; services: Service[] };
+type Props = {
+  apiConfig: ApiClientConfig;
+  staff: StaffMember[];
+  services: Service[];
+  onStaffChange?: (staff: StaffMember[]) => void;
+};
 
 type EditValues = { name: string; isActive: boolean; isBookable: boolean };
 
@@ -37,7 +42,7 @@ const EMPTY_CREATE_VALUES: CreateValues = {
   isBookable: true,
 };
 
-export default function StaffPanel({ apiConfig, staff: initialStaff, services }: Props) {
+export default function StaffPanel({ apiConfig, staff: initialStaff, services, onStaffChange }: Props) {
   const [staff, setStaff] = useState<StaffMember[]>(initialStaff);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +61,9 @@ export default function StaffPanel({ apiConfig, staff: initialStaff, services }:
   async function refresh() {
     setError(null);
     try {
-      setStaff(await listStaff(apiConfig));
+      const result = await listStaff(apiConfig);
+      setStaff(result);
+      onStaffChange?.(result);
     } catch (err) {
       setError(describeApiError(err));
     }
@@ -112,6 +119,12 @@ export default function StaffPanel({ apiConfig, staff: initialStaff, services }:
   }
 
   async function handleSaveServices(staffId: string) {
+    const confirmed = window.confirm(
+      "Saving will REPLACE ALL of this staff member's current service links with exactly what's checked here. " +
+        "This list always opens with nothing pre-checked, since there's no way to load their current links — " +
+        "if you're not sure what's currently linked, cancel and check with the team before saving. Continue?",
+    );
+    if (!confirmed) return;
     try {
       await replaceStaffServices(apiConfig, staffId, [...selectedServiceIds]);
       setManagingId(null);
@@ -203,6 +216,12 @@ export default function StaffPanel({ apiConfig, staff: initialStaff, services }:
                 <tr className="border-b border-gray-100">
                   <td colSpan={4} className="py-2">
                     <div className="space-y-2 rounded border border-gray-200 bg-gray-50 p-3">
+                      <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                        Warning: saving here replaces ALL of this staff member's current service links with exactly
+                        what's checked below. Nothing is pre-checked — there's no way to load their existing links —
+                        so if you're not sure what's currently linked, check with the team before saving. Unchecked
+                        boxes will be removed.
+                      </p>
                       {servicesError && <p className="text-sm text-red-700">{servicesError}</p>}
                       <div className="flex flex-wrap gap-3">
                         {services.map((svc) => (

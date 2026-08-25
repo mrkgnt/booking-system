@@ -9,7 +9,11 @@ import {
 } from "../../lib/api/service-categories.js";
 import { describeApiError } from "../../lib/api/errors.js";
 
-type Props = { apiConfig: ApiClientConfig; categories: ServiceCategory[] };
+type Props = {
+  apiConfig: ApiClientConfig;
+  categories: ServiceCategory[];
+  onCategoriesChange?: (categories: ServiceCategory[]) => void;
+};
 
 type EditValues = { lv: string; ru: string; en: string };
 
@@ -24,7 +28,7 @@ type CreateValues = {
 
 const EMPTY_CREATE_VALUES: CreateValues = { lv: "", ru: "", en: "", icon: "", displayOrder: 0, isActive: true };
 
-export default function CategoriesPanel({ apiConfig, categories: initialCategories }: Props) {
+export default function CategoriesPanel({ apiConfig, categories: initialCategories, onCategoriesChange }: Props) {
   const [categories, setCategories] = useState<ServiceCategory[]>(initialCategories);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +43,9 @@ export default function CategoriesPanel({ apiConfig, categories: initialCategori
   async function refresh() {
     setError(null);
     try {
-      setCategories(await listServiceCategories(apiConfig));
+      const result = await listServiceCategories(apiConfig);
+      setCategories(result);
+      onCategoriesChange?.(result);
     } catch (err) {
       setError(describeApiError(err));
     }

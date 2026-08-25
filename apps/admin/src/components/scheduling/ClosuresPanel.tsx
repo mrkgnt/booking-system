@@ -121,6 +121,7 @@ export default function ClosuresPanel({ apiConfig, staff }: Props) {
           <input
             required
             type="date"
+            min={formValues.startsOn || undefined}
             value={formValues.endsOn}
             onChange={(e) => setFormValues((v) => ({ ...v, endsOn: e.target.value }))}
           />

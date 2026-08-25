@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { ApiClientConfig } from "../lib/api/client.js";
-import { listServiceCategories, type ServiceCategory } from "../lib/api/service-categories.js";
+import type { ServiceCategory } from "../lib/api/service-categories.js";
 import { listServices, listStaff, type Service, type StaffMember } from "../lib/api/catalog.js";
+import { describeApiError } from "../lib/api/errors.js";
 import CategoriesPanel from "./catalog/CategoriesPanel.js";
 import ServicesPanel from "./catalog/ServicesPanel.js";
 import StaffPanel from "./catalog/StaffPanel.js";
@@ -10,28 +11,44 @@ type Tab = "categories" | "services" | "staff";
 
 type Props = { apiConfig: ApiClientConfig; categories: ServiceCategory[] };
 
-export default function CatalogScreen({ apiConfig, categories }: Props) {
+export default function CatalogScreen({ apiConfig, categories: initialCategories }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("categories");
+
+  // Categories are cached here (not re-derived from a prop each mount) so
+  // that a mutation made while the Categories tab is active is still
+  // reflected after switching away and back, and in the Services tab's
+  // category <select>, which shares this same state.
+  const [categories, setCategories] = useState<ServiceCategory[]>(initialCategories);
+
+  // Services are fetched once and shared between the Services tab and the
+  // Staff tab's "manage services" checklist, so both stay in sync.
   const [services, setServices] = useState<Service[] | null>(null);
-  const [servicesCategories, setServicesCategories] = useState<ServiceCategory[] | null>(null);
+  const [servicesLoading, setServicesLoading] = useState(false);
+  const [servicesError, setServicesError] = useState<string | null>(null);
+
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
-  const [staffServices, setStaffServices] = useState<Service[] | null>(null);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffError, setStaffError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (activeTab === "services" && services === null) {
-      Promise.all([listServices(apiConfig), listServiceCategories(apiConfig)]).then(([s, c]) => {
-        setServices(s);
-        setServicesCategories(c);
-      });
+    if ((activeTab === "services" || activeTab === "staff") && services === null && !servicesLoading) {
+      setServicesLoading(true);
+      setServicesError(null);
+      listServices(apiConfig)
+        .then(setServices)
+        .catch((err) => setServicesError(describeApiError(err)))
+        .finally(() => setServicesLoading(false));
     }
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeTab === "staff" && staff === null) {
-      Promise.all([listStaff(apiConfig), listServices(apiConfig)]).then(([st, sv]) => {
-        setStaff(st);
-        setStaffServices(sv);
-      });
+    if (activeTab === "staff" && staff === null && !staffLoading) {
+      setStaffLoading(true);
+      setStaffError(null);
+      listStaff(apiConfig)
+        .then(setStaff)
+        .catch((err) => setStaffError(describeApiError(err)))
+        .finally(() => setStaffLoading(false));
     }
   }, [activeTab]);
 
@@ -58,12 +75,39 @@ export default function CatalogScreen({ apiConfig, categories }: Props) {
         </button>
       </div>
 
-      {activeTab === "categories" && <CategoriesPanel apiConfig={apiConfig} categories={categories} />}
-      {activeTab === "services" && services && servicesCategories && (
-        <ServicesPanel apiConfig={apiConfig} services={services} categories={servicesCategories} />
+      {activeTab === "categories" && (
+        <CategoriesPanel apiConfig={apiConfig} categories={categories} onCategoriesChange={setCategories} />
       )}
-      {activeTab === "staff" && staff && staffServices && (
-        <StaffPanel apiConfig={apiConfig} staff={staff} services={staffServices} />
+
+      {activeTab === "services" && (
+        <>
+          {servicesError && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{servicesError}</p>}
+          {!servicesError && (servicesLoading || services === null) && (
+            <p className="text-sm text-gray-500">Loading…</p>
+          )}
+          {services !== null && (
+            <ServicesPanel
+              apiConfig={apiConfig}
+              services={services}
+              categories={categories}
+              onServicesChange={setServices}
+            />
+          )}
+        </>
+      )}
+
+      {activeTab === "staff" && (
+        <>
+          {(servicesError || staffError) && (
+            <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{servicesError ?? staffError}</p>
+          )}
+          {!servicesError && !staffError && (servicesLoading || staffLoading || services === null || staff === null) && (
+            <p className="text-sm text-gray-500">Loading…</p>
+          )}
+          {services !== null && staff !== null && (
+            <StaffPanel apiConfig={apiConfig} staff={staff} services={services} onStaffChange={setStaff} />
+          )}
+        </>
       )}
     </div>
   );

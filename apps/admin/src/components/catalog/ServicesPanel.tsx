@@ -4,7 +4,12 @@ import { createService, deleteService, listServices, updateService, type Service
 import type { ServiceCategory } from "../../lib/api/service-categories.js";
 import { describeApiError } from "../../lib/api/errors.js";
 
-type Props = { apiConfig: ApiClientConfig; services: Service[]; categories: ServiceCategory[] };
+type Props = {
+  apiConfig: ApiClientConfig;
+  services: Service[];
+  categories: ServiceCategory[];
+  onServicesChange?: (services: Service[]) => void;
+};
 
 type EditValues = { lv: string; ru: string; en: string; durationMinutes: number; isActive: boolean };
 
@@ -44,7 +49,7 @@ const EMPTY_CREATE_VALUES: CreateValues = {
   isActive: true,
 };
 
-export default function ServicesPanel({ apiConfig, services: initialServices, categories }: Props) {
+export default function ServicesPanel({ apiConfig, services: initialServices, categories, onServicesChange }: Props) {
   const [services, setServices] = useState<Service[]>(initialServices);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +64,9 @@ export default function ServicesPanel({ apiConfig, services: initialServices, ca
   async function refresh() {
     setError(null);
     try {
-      setServices(await listServices(apiConfig));
+      const result = await listServices(apiConfig);
+      setServices(result);
+      onServicesChange?.(result);
     } catch (err) {
       setError(describeApiError(err));
     }
