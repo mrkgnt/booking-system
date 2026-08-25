@@ -31,6 +31,7 @@ test("create a staff member, edit them, link services, and delete them", async (
   await editedRow.getByRole("button", { name: "Manage services" }).click();
   const firstServiceCheckbox = page.getByRole("checkbox").first();
   await firstServiceCheckbox.check();
+  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Save services" }).click();
   await expect(firstServiceCheckbox).not.toBeVisible(); // panel closes on save
 
