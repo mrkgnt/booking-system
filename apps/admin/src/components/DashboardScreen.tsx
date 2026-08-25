@@ -62,15 +62,27 @@ export default function DashboardScreen({
       setError(null);
       try {
         const { from, to } = weekRangeIso(weekStart);
-        const [b, h, c] = await Promise.all([
+        // Business hours/closures are fetched business-wide (staffId: null)
+        // unconditionally, then unioned with the staff-specific fetch when a
+        // staff filter is active. The API's staffId query param is a strict
+        // .eq() filter with no fallback — a staff member with no hours/
+        // closures of their own (true for every staff at Dent Di today, per
+        // db/seed/generate-seed.ts) comes back as an empty array, which would
+        // otherwise make the calendar render as "closed all week" for that
+        // staff even though the business-wide hours actually apply. Ordering
+        // staff-specific first means WeekCalendar's businessHours.find(...)
+        // still prefers a real staff override for any day that has one.
+        const [b, businessWideHours, businessWideClosures, staffHours, staffClosures] = await Promise.all([
           listBookings(apiConfig, { from, to, staffId: staffId || undefined }),
-          listBusinessHours(apiConfig, staffId || null),
-          listClosures(apiConfig, staffId || null),
+          listBusinessHours(apiConfig, null),
+          listClosures(apiConfig, null),
+          staffId ? listBusinessHours(apiConfig, staffId) : Promise.resolve([] as BusinessHour[]),
+          staffId ? listClosures(apiConfig, staffId) : Promise.resolve([] as Closure[]),
         ]);
         if (cancelled) return;
         setBookings(b);
-        setBusinessHours(h);
-        setClosures(c);
+        setBusinessHours([...staffHours, ...businessWideHours]);
+        setClosures([...staffClosures, ...businessWideClosures]);
       } catch (err) {
         if (!cancelled) setError(describeApiError(err));
       } finally {
