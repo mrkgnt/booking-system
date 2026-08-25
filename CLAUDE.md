@@ -108,15 +108,15 @@ detail: see `PROJECT_CONTEXT.md`.
         check. Rate limiting (in-memory) + Turnstile (env-gated, fails
         closed) are structurally correct but insufficient once deployed
         serverless (see Open Items).
-      - 60/60 vitest passing. **Not verified live** (DB-touching paths)
-        — this sandbox's network egress blocks `*.supabase.co`; run
+      - 60/60 vitest passing. **Not yet verified live** (DB-touching
+        paths) — no environment-specific blocker, just not yet run; run
         locally with the real `DENTDI_SUPABASE_SECRET_KEY`.
 - [x] `POST /bookings/cancel` / `POST /bookings/reschedule`.
       Capability-token model (not single-use — validity from
       `expires_at`/booking `status`, not `used_at`), issued at confirm
       time, refreshed (not reissued) on reschedule. Reschedule reuses
       `hasExistingConflict` with an `excludeBookingId` param. 60/60
-      vitest passing, not verified live (same sandbox restriction).
+      vitest passing, not yet verified live (same as above).
 - [ ] Automated DB tests (vitest + supabase-js) — blocked on real
       env-based Supabase credentials existing for the Hono API project.
 - [x] **Bug found & fixed:** `TURNSTILE_ENABLED` env parsing used
@@ -248,17 +248,34 @@ detail: see `PROJECT_CONTEXT.md`.
       new coverage is E2E, per plan) — 17/17 admin vitest and 104/104
       api vitest passing, both pre-existing counts confirmed unbroken
       by a fresh regression run, `astro check`/`tsc --noEmit` clean.
-      **Not verified live in this pass**: this task's own regression
-      sweep ran in a sandbox with no local dev servers and no network
-      egress to the live Dent Di Supabase project (the same documented
-      restriction as earlier entries above) — the full 8-spec Playwright
-      run was attempted and failed immediately on
-      `ERR_CONNECTION_REFUSED`, not a real assertion failure. Needs a
-      real local run (`E2E_OWNER_EMAIL=... E2E_OWNER_PASSWORD=...
-      pnpm --filter @booking-system/admin test:e2e` with both dev
-      servers up) before this coverage counts as browser-verified, the
-      same way `login-and-bookings` was verified in the entry above. A
-      handful of Minor code-review findings were deferred (not
+      **Update (2026-08-25): browser-verified.** All 8 specs run
+      repeatably green (10/10 tests, run twice back to back, both
+      serially and with default parallelism) against real dev servers
+      and the live Dent Di project. Getting there surfaced 3 real
+      backend bugs and 5 spec-only bugs that static review hadn't
+      caught (all fixed, see the Decisions Log row below):
+      - **CORS didn't allow `PUT`** (`apps/api/src/app.ts`) — silently
+        blocked business-hours replace and staff↔service link replace
+        from ever completing in a real browser (vitest never caught
+        this; it calls the Hono app in-process, bypassing actual
+        browser CORS enforcement).
+      - **False 404 on translation-only PATCHes**
+        (`admin-service-categories.ts`, and defensively
+        `admin-services.ts`/`admin-staff.ts`): building the Supabase
+        `.update()` payload only from direct-column fields meant a
+        request touching only a translations-table field (name/bio)
+        sent an empty update, which Supabase reports as zero rows
+        matched — wrongly 404ing a row that genuinely exists. Only the
+        Categories panel's edit flow happened to send name-only, which
+        is why only that spec surfaced it.
+      - 5 Playwright locator/timing bugs across the specs (stale
+        `row` locators after an inline-edit re-render, date-label
+        collisions between leftover rows and `Date.now() % 27` not
+        actually being collision-free across nearby runs, a strict-mode
+        collision with the astro dev toolbar's hidden props dump, and a
+        weak save-button-enabled settle signal) — the UI itself was
+        correct in every case.
+      A handful of Minor code-review findings remain deferred (not
       dropped) across these screens — payload-shape polish, a couple of
       missing `required` attributes on inline-edit fields, one
       data-loading-pattern inconsistency in `ClosuresPanel`, one missing
@@ -295,6 +312,7 @@ detail: see `PROJECT_CONTEXT.md`.
 | Admin/staff data-access pattern | Admin routes use a per-request Supabase client scoped to the staff member's own JWT (anon key + Authorization forwarding), relying on existing RLS (`is_active_member()`) as the real authorization boundary — not the service-role key. `staffAuthMiddleware`'s one service-role read (`business_members` status) exists only to turn "RLS returns zero rows" into a clean 401/403. |
 | Back-office UI stack | Astro (`output: "server"`) + React islands (`client:load`) + Tailwind v4 via `@tailwindcss/vite`, `apps/admin`. SSR auth via `@supabase/ssr` — Astro middleware checks the session on every request and redirects to `/login`, rather than a client-side-only check. Distinct neutral admin visual theme (Tailwind defaults), not the public-site's sage/cream/Georgia-serif brand — reserved for the future public marketing site. |
 | Admin UI resource coverage | Every `/admin/*` resource with a working API route now has a corresponding UI screen: Patients (list/search/detail/edit), Catalog (service categories/services/staff CRUD + staff↔service linking), Scheduling (business hours/closures) — built via a strict TDD split (Playwright spec written and confirmed red first, then a fresh agent with no visibility into the spec built the UI against a written accessibility contract, then the spec confirmed green). 8 E2E spec files total, all against the live Dent Di project. |
+| Admin E2E suite — browser-verified | All 8 specs (10 tests) run repeatably green against real dev servers + the live Dent Di project, on a machine with normal network access — the earlier "sandbox has no network egress" caveat was specific to one prior execution environment, not a lasting constraint, and has been removed from this file. Getting a clean run surfaced and fixed 3 real backend bugs (CORS missing `PUT`; a false-404-on-translation-only-PATCH bug in `admin-service-categories.ts`/`admin-services.ts`/`admin-staff.ts`) and 5 Playwright-only bugs (stale row locators post-edit-render, `Date.now() % 27` date-label collisions with leftover rows, a strict-mode collision with the astro dev toolbar's hidden props dump, a weak save-button settle signal) — none were real UI defects. |
 
 ## Open / Non-Blocking Items
 
@@ -320,12 +338,10 @@ detail: see `PROJECT_CONTEXT.md`.
   across serverless instances.
 - End-to-end curl verification of the actual booking-creation DB path
   (`GET /availability` → `POST /bookings` → `POST /bookings/confirm`)
-  needs to run locally with the real `DENTDI_SUPABASE_SECRET_KEY` —
-  blocked in this sandbox by the same network egress restriction
-  documented against `/_smoke`.
-- End-to-end curl verification of the cancel/reschedule flow needs to run
-  locally with the real `DENTDI_SUPABASE_SECRET_KEY` — same sandbox
-  network restriction as the rest of the booking flow.
+  still needs to run with the real `DENTDI_SUPABASE_SECRET_KEY` — no
+  environment blocker, just not yet done.
+- End-to-end curl verification of the cancel/reschedule flow still needs
+  to run the same way — not yet done.
 - Admin-side booking management is now **built and browser-verified**
   (see "Staff/admin backend built" and "apps/admin foundation" above).
   **Owner account status** (2026-08-23): the account was deleted and
