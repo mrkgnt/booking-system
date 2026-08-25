@@ -21,8 +21,17 @@ test("force-book rejects a conflicting slot with a visible error, and doesn't du
     await page.getByRole("button", { name: "Book" }).click();
   }
 
+  // Scoped to rows that still show a Cancel button: the day-of-month label
+  // alone isn't unique against leftover bookings from earlier runs of this
+  // same spec (Date.now() % 27 collides more often than it looks), and a
+  // stale cancelled leftover with the same label renders no action buttons,
+  // so an unscoped filter can match it too and inflate the count.
+  const row = page
+    .getByRole("row")
+    .filter({ hasText: label })
+    .filter({ has: page.getByRole("button", { name: "Cancel" }) });
+
   await forceBook();
-  const row = page.getByRole("row").filter({ hasText: label });
   await expect(row).toBeVisible({ timeout: 10_000 });
 
   // Same service/staff/time again — must be rejected, not silently duplicated.

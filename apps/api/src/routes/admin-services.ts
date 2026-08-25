@@ -90,22 +90,26 @@ adminServicesRoute.patch("/admin/services/:id", tenantMiddleware, staffAuthMiddl
   }
   const input = parsed.data;
   const supabase = c.get("supabaseUser");
-  const { data: service, error } = await supabase
-    .from("services")
-    .update({
-      ...(input.categoryId !== undefined ? { category_id: input.categoryId } : {}),
-      ...(input.durationMinutes !== undefined ? { duration_minutes: input.durationMinutes } : {}),
-      ...(input.bufferMinutesBefore !== undefined ? { buffer_minutes_before: input.bufferMinutesBefore } : {}),
-      ...(input.bufferMinutesAfter !== undefined ? { buffer_minutes_after: input.bufferMinutesAfter } : {}),
-      ...(input.priceAmount !== undefined ? { price_amount: input.priceAmount } : {}),
-      ...(input.priceCurrency !== undefined ? { price_currency: input.priceCurrency } : {}),
-      ...(input.pricePrefix !== undefined ? { price_prefix: input.pricePrefix } : {}),
-      ...(input.displayOrder !== undefined ? { display_order: input.displayOrder } : {}),
-      ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
-    })
-    .eq("id", parsedParams.data.id)
-    .select("*")
-    .maybeSingle();
+  const columnChanges = {
+    ...(input.categoryId !== undefined ? { category_id: input.categoryId } : {}),
+    ...(input.durationMinutes !== undefined ? { duration_minutes: input.durationMinutes } : {}),
+    ...(input.bufferMinutesBefore !== undefined ? { buffer_minutes_before: input.bufferMinutesBefore } : {}),
+    ...(input.bufferMinutesAfter !== undefined ? { buffer_minutes_after: input.bufferMinutesAfter } : {}),
+    ...(input.priceAmount !== undefined ? { price_amount: input.priceAmount } : {}),
+    ...(input.priceCurrency !== undefined ? { price_currency: input.priceCurrency } : {}),
+    ...(input.pricePrefix !== undefined ? { price_prefix: input.pricePrefix } : {}),
+    ...(input.displayOrder !== undefined ? { display_order: input.displayOrder } : {}),
+    ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
+  };
+  // A request that only touches name/description (translations-table
+  // fields, not columns on this table) leaves columnChanges empty —
+  // Supabase's .update({}) matches zero rows in that case, which would
+  // otherwise 404 a service that genuinely exists.
+  const query =
+    Object.keys(columnChanges).length > 0
+      ? supabase.from("services").update(columnChanges).eq("id", parsedParams.data.id).select("*").maybeSingle()
+      : supabase.from("services").select("*").eq("id", parsedParams.data.id).maybeSingle();
+  const { data: service, error } = await query;
   if (error) {
     const { httpStatus, body } = classifySupabaseError(error);
     return c.json(body, httpStatus as 409 | 500);

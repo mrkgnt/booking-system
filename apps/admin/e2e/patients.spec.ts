@@ -15,7 +15,11 @@ test("browse patients, open a detail page, edit and persist notes", async ({ pag
   const patientName = (await firstRow.locator("td").first().textContent())!.trim();
   await firstRow.getByRole("link", { name: "View" }).click();
   await expect(page).toHaveURL(/\/patients\/[0-9a-f-]{36}$/);
-  await expect(page.getByText(patientName)).toBeVisible();
+  // getByRole("heading") rather than getByText: the astro dev toolbar embeds
+  // every island's serialized props (including patient.name) in a hidden
+  // debug <code> block that's still present in the DOM, so a plain
+  // getByText(patientName) matches it too and trips a strict-mode violation.
+  await expect(page.getByRole("heading", { name: patientName })).toBeVisible();
 
   const note = `E2E note ${Date.now()}`;
   const notesField = page.getByPlaceholder("Notes");

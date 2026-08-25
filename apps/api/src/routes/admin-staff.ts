@@ -82,18 +82,22 @@ adminStaffRoute.patch("/admin/staff/:id", tenantMiddleware, staffAuthMiddleware,
   }
   const input = parsed.data;
   const supabase = c.get("supabaseUser");
-  const { data: staffRow, error } = await supabase
-    .from("staff")
-    .update({
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.photoUrl !== undefined ? { photo_url: input.photoUrl } : {}),
-      ...(input.displayOrder !== undefined ? { display_order: input.displayOrder } : {}),
-      ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
-      ...(input.isBookable !== undefined ? { is_bookable: input.isBookable } : {}),
-    })
-    .eq("id", parsedParams.data.id)
-    .select("*")
-    .maybeSingle();
+  const columnChanges = {
+    ...(input.name !== undefined ? { name: input.name } : {}),
+    ...(input.photoUrl !== undefined ? { photo_url: input.photoUrl } : {}),
+    ...(input.displayOrder !== undefined ? { display_order: input.displayOrder } : {}),
+    ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
+    ...(input.isBookable !== undefined ? { is_bookable: input.isBookable } : {}),
+  };
+  // A request that only touches `bio` (a translations-table field, not a
+  // column on this table) leaves columnChanges empty — Supabase's
+  // .update({}) matches zero rows in that case, which would otherwise
+  // 404 a staff member that genuinely exists.
+  const query =
+    Object.keys(columnChanges).length > 0
+      ? supabase.from("staff").update(columnChanges).eq("id", parsedParams.data.id).select("*").maybeSingle()
+      : supabase.from("staff").select("*").eq("id", parsedParams.data.id).maybeSingle();
+  const { data: staffRow, error } = await query;
   if (error) {
     const { httpStatus, body } = classifySupabaseError(error);
     return c.json(body, httpStatus as 409 | 500);

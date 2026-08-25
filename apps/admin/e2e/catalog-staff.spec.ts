@@ -22,8 +22,8 @@ test("create a staff member, edit them, link services, and delete them", async (
   // Edit.
   await row.getByRole("button", { name: "Edit" }).click();
   const editedName = `${name} (edited)`;
-  await row.getByPlaceholder("Name").fill(editedName);
-  await row.getByRole("button", { name: "Save" }).click();
+  await page.getByPlaceholder("Name").fill(editedName);
+  await page.getByRole("button", { name: "Save" }).click();
   const editedRow = page.getByRole("row").filter({ hasText: editedName });
   await expect(editedRow).toBeVisible({ timeout: 10_000 });
 

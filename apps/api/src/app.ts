@@ -24,7 +24,7 @@ app.use(
   cors({
     origin: env.ADMIN_APP_ORIGIN,
     allowHeaders: ["Content-Type", "Authorization", "X-Tenant-Slug"],
-    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   }),
 );
 

@@ -77,16 +77,21 @@ adminServiceCategoriesRoute.patch(
     }
     const supabase = c.get("supabaseUser");
     const { icon, displayOrder, isActive, name } = parsed.data;
-    const { data: category, error } = await supabase
-      .from("service_categories")
-      .update({
-        ...(icon !== undefined ? { icon } : {}),
-        ...(displayOrder !== undefined ? { display_order: displayOrder } : {}),
-        ...(isActive !== undefined ? { is_active: isActive } : {}),
-      })
-      .eq("id", parsedParams.data.id)
-      .select("*")
-      .maybeSingle();
+    const columnChanges = {
+      ...(icon !== undefined ? { icon } : {}),
+      ...(displayOrder !== undefined ? { display_order: displayOrder } : {}),
+      ...(isActive !== undefined ? { is_active: isActive } : {}),
+    };
+    // A request that only touches `name` (a translations-table field, not a
+    // column on this table) leaves columnChanges empty — Supabase's
+    // .update({}) matches zero rows in that case, which would otherwise
+    // 404 a category that genuinely exists. Read instead of write when
+    // there's no column to write.
+    const query =
+      Object.keys(columnChanges).length > 0
+        ? supabase.from("service_categories").update(columnChanges).eq("id", parsedParams.data.id).select("*").maybeSingle()
+        : supabase.from("service_categories").select("*").eq("id", parsedParams.data.id).maybeSingle();
+    const { data: category, error } = await query;
     if (error) {
       const { httpStatus, body } = classifySupabaseError(error);
       return c.json(body, httpStatus as 409 | 500);

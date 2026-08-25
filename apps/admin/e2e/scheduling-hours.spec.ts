@@ -24,8 +24,11 @@ test.afterEach(async ({ page }) => {
   if (!(await mondayOpensInput.isVisible().catch(() => false))) return;
 
   await mondayOpensInput.fill(value);
-  await saveButton.click();
-  await expect(saveButton).toBeEnabled();
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/admin/business-hours") && r.request().method() === "PUT"),
+    saveButton.click(),
+  ]);
+  expect(response.ok()).toBe(true);
 });
 
 test("view and edit the business-wide weekly hours", async ({ page }) => {
@@ -46,11 +49,16 @@ test("view and edit the business-wide weekly hours", async ({ page }) => {
   originalMondayOpensAt = await mondayOpensInput.inputValue();
 
   await mondayOpensInput.fill("08:30");
-  await saveButton.click();
-  // The backend does a delete-then-insert for this endpoint; wait for the
-  // save to actually settle (the button re-enables when `saving` clears)
-  // before reloading, instead of racing the request with `page.reload()`.
-  await expect(saveButton).toBeEnabled();
+  // Wait for the actual PUT response to settle before reloading, instead of
+  // racing the request with page.reload() — the button's disabled state is
+  // too weak a signal (React can flip it back to enabled on the very next
+  // tick, before the request genuinely finishes), which let this reload
+  // land before the save had persisted.
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/admin/business-hours") && r.request().method() === "PUT"),
+    saveButton.click(),
+  ]);
+  expect(response.ok()).toBe(true);
 
   await page.reload();
   await expect(

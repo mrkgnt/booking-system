@@ -24,8 +24,8 @@ test("create, edit, and delete a service", async ({ page }) => {
 
   await row.getByRole("button", { name: "Edit" }).click();
   const editedLv = `${nameLv} (edited)`;
-  await row.getByPlaceholder("Name (LV)").fill(editedLv);
-  await row.getByRole("button", { name: "Save" }).click();
+  await page.getByPlaceholder("Name (LV)").fill(editedLv);
+  await page.getByRole("button", { name: "Save" }).click();
   const editedRow = page.getByRole("row").filter({ hasText: editedLv });
   await expect(editedRow).toBeVisible({ timeout: 10_000 });
 
