@@ -92,4 +92,15 @@ describe("isDateClosed", () => {
   it("returns false when no closure matches", () => {
     expect(isDateClosed("2026-03-15", closures, null)).toBe(false);
   });
+
+  it("matches a recurring-yearly closure that wraps the year boundary (Dec 24 - Jan 2), any year", () => {
+    const wrapping = [
+      { staffId: null, startsOn: "2020-12-24", endsOn: "2020-01-02", isRecurringYearly: true },
+    ];
+    // Inside the wrapped range, on either side of the boundary.
+    expect(isDateClosed("2026-12-30", wrapping, null)).toBe(true);
+    expect(isDateClosed("2026-01-01", wrapping, null)).toBe(true);
+    // Outside the wrapped range.
+    expect(isDateClosed("2026-06-15", wrapping, null)).toBe(false);
+  });
 });

@@ -18,6 +18,7 @@ export default function DatePickerButton({ onSelect }: Props) {
       <PopoverContent className="w-auto p-0">
         <Calendar
           mode="single"
+          weekStartsOn={1}
           onSelect={(date) => {
             if (date) {
               onSelect(date);

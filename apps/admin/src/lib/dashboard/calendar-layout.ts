@@ -82,7 +82,11 @@ export function isDateClosed(dateKey: string, closures: ClosureRange[], staffId:
       const monthDay = dateKey.slice(5);
       const startMonthDay = c.startsOn.slice(5);
       const endMonthDay = c.endsOn.slice(5);
-      return monthDay >= startMonthDay && monthDay <= endMonthDay;
+      if (startMonthDay <= endMonthDay) {
+        return monthDay >= startMonthDay && monthDay <= endMonthDay;
+      }
+      // Wraps the year boundary (e.g. Dec 24 - Jan 2).
+      return monthDay >= startMonthDay || monthDay <= endMonthDay;
     }
     return dateKey >= c.startsOn && dateKey <= c.endsOn;
   });
