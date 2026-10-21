@@ -12,10 +12,11 @@ const locale = Astro.url.searchParams.get("locale") ?? undefined;
 
 // fetchTenantInfo never throws — a missing/invalid tenant slug or an
 // apps/api outage both resolve to `null` here rather than crashing this
-// SSR render (see its own comment for why: issue #11 owns the polished
-// failure UX, this ticket just needs to not crash or block the trigger).
+// SSR render. DrawerContent renders the polished, locale-aware
+// "temporarily unavailable" message for both cases (issue #11); the real
+// cause is still distinguishable via fetchTenantInfo's own console.error.
 const tenantInfo = tenantSlug ? await fetchTenantInfo(import.meta.env.API_BASE_URL, tenantSlug, locale) : null;
 ---
 <DrawerLayout title={tenantInfo ? tenantInfo.tenant.name : "Booking"}>
-  <DrawerContent tenantInfo={tenantInfo} />
+  <DrawerContent tenantInfo={tenantInfo} locale={locale} />
 </DrawerLayout>
