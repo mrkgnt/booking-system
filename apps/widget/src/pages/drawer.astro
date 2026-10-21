@@ -2,31 +2,46 @@
 import DrawerLayout from "../layouts/DrawerLayout.astro";
 import DrawerContent from "../components/DrawerContent.tsx";
 import { fetchTenantInfo } from "../lib/api/tenant-info.js";
+import { resolveLocale } from "../lib/i18n/messages.js";
 
 // Tenant slug flows per-request from the embed snippet's data-tenant
 // attribute, via embed.js's iframe `src` (?tenant=<slug>) — never a
 // build-time env var (see src/env.d.ts; this is the core architectural
 // difference from apps/admin's one-deployment-per-tenant model).
 const tenantSlug = Astro.url.searchParams.get("tenant");
-const locale = Astro.url.searchParams.get("locale") ?? undefined;
+const requestedLocale = Astro.url.searchParams.get("locale") ?? undefined;
 
 // fetchTenantInfo never throws — a missing/invalid tenant slug or an
 // apps/api outage both resolve to `null` here rather than crashing this
-// SSR render (see its own comment for why: issue #11 owns the polished
-// failure UX, this ticket just needs to not crash or block the trigger).
-const tenantInfo = tenantSlug ? await fetchTenantInfo(import.meta.env.API_BASE_URL, tenantSlug, locale) : null;
+// SSR render. DrawerContent renders the polished, locale-aware
+// "temporarily unavailable" message for both cases (issue #11); the real
+// cause is still distinguishable via fetchTenantInfo's own console.error.
+const tenantInfo = tenantSlug
+  ? await fetchTenantInfo(import.meta.env.API_BASE_URL, tenantSlug, requestedLocale)
+  : null;
+
+// createBookingSchema (apps/api/src/routes/bookings.schema.ts) only
+// accepts "lv" | "ru" | "en" — resolve once here (issue #14), layering
+// requestedLocale over the Tenant's own default_locale (rather than
+// issue #11's hardcoded "en" fallback) whenever tenantInfo loaded
+// successfully, so DrawerContent's booking submission always has a value
+// the contract actually accepts. When tenantInfo is null there's no
+// Tenant default to layer onto, so this collapses to exactly #11's
+// original requestedLocale-or-"en" behavior for the unavailable message.
+const locale = resolveLocale(requestedLocale, resolveLocale(tenantInfo?.tenant.defaultLocale));
 ---
-{/* initialLocale mirrors drawer.astro's own locale resolution above: the
-    explicit ?locale= query param if the embed had one, else whatever the
-    SSR fetch actually resolved to (the tenant's default_locale) — passed
-    down so the client-side switcher (issue #13) knows which option is
-    currently active without re-deriving it. */}
+{/* `locale` mirrors drawer.astro's own locale resolution above — the
+    explicit ?locale= query param if the embed had one, layered over the
+    Tenant's own default_locale — passed down so DrawerContent's in-drawer
+    switcher (issue #13) knows which option is currently active without
+    re-deriving it, and so its booking submission (issue #14) always has a
+    createBookingSchema-valid starting value. */}
 <DrawerLayout title={tenantInfo ? tenantInfo.tenant.name : "Booking"}>
   <DrawerContent
     client:load
     tenantInfo={tenantInfo}
-    apiBaseUrl={import.meta.env.API_BASE_URL}
     tenantSlug={tenantSlug ?? ""}
-    initialLocale={locale ?? tenantInfo?.tenant.defaultLocale ?? "en"}
+    apiBaseUrl={import.meta.env.API_BASE_URL}
+    locale={locale}
   />
 </DrawerLayout>

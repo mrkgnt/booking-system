@@ -38,7 +38,20 @@
     "align-items:center;justify-content:center;background:#fff;}" +
     "#platform-widget-spinner .pw-spin{width:32px;height:32px;border-radius:50%;" +
     "border:3px solid #ddd;border-top-color:#111;animation:pw-spin .8s linear infinite;}" +
-    "@keyframes pw-spin{to{transform:rotate(360deg);}}";
+    "@keyframes pw-spin{to{transform:rotate(360deg);}}" +
+    // Mobile full-screen takeover (issue #12). Breakpoint: 768px, matching
+    // this repo's existing Tailwind `md` cutoff (min-width: 768px) used
+    // elsewhere in apps/admin/apps/widget — "mobile" is anything below it.
+    // Below the breakpoint, the drawer covers the entire viewport (no
+    // visible side-panel edge) and the backdrop's dimming is explicitly
+    // zeroed out rather than relied upon to be occluded — the host page
+    // behind it is already fully covered, but a once-off future stacking
+    // change (e.g. from #10/#11's work on the same file) shouldn't be able
+    // to make a dim backdrop reappear here as a side effect.
+    "@media (max-width:767px){" +
+    "#platform-widget-drawer{left:0;width:100%;box-shadow:none;}" +
+    "#platform-widget-backdrop.pw-open{opacity:0;pointer-events:none;}" +
+    "}";
 
   function injectStyles(doc) {
     if (doc.getElementById(STYLE_ID)) return;
@@ -170,7 +183,9 @@
       isOpen = false;
     }
 
-    createTrigger(doc, open);
+    if (!config.hideDefaultButton) {
+      createTrigger(doc, open);
+    }
 
     var bookTriggers = doc.querySelectorAll("[data-platform-book]");
     for (var i = 0; i < bookTriggers.length; i++) {

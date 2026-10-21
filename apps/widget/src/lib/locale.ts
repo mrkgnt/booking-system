@@ -11,19 +11,17 @@ export function shouldShowLocaleSwitcher(supportedLocales: string[]): boolean {
 }
 
 // The switcher's own "Language" label, localized for the locale currently
-// active in the drawer. Deliberately tiny and scoped to just this one
-// string — NOT a general i18n dictionary for the rest of the widget's UI.
-// Issue #13's parent spec flags that issue #11 (failure-UX ticket, running
-// in parallel off the same base commit) may build its own locale-keyed
-// string helper for its "unavailable" message; this was built independently
-// per that guidance, and can be reconciled/merged with #11's helper at
-// merge time if one already exists by then.
-const LANGUAGE_LABELS: Record<string, string> = {
-  en: "Language",
-  lv: "Valoda",
-  ru: "Язык",
-};
+// active in the drawer. Originally this file had its own standalone
+// LANGUAGE_LABELS map + fallback, built in parallel with issue #11's
+// separate src/lib/i18n/messages.ts (same "resolveLocale + a
+// key-then-locale message table" shape, built independently per that
+// ticket's own guidance). Reconciled at merge time (issue #13 x #11/#14)
+// into one mechanism: messages.ts is now the single locale->string lookup
+// in this app — this is a thin wrapper over its "language" key so callers
+// of this module (LocaleSwitcher.tsx) keep their existing one-arg call
+// shape without needing to know that detail.
+import { getMessage } from "./i18n/messages.js";
 
 export function resolveLanguageLabel(locale: string): string {
-  return LANGUAGE_LABELS[locale] ?? LANGUAGE_LABELS.en;
+  return getMessage("language", locale);
 }

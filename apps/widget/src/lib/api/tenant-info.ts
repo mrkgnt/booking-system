@@ -38,9 +38,12 @@ export function buildTenantInfoUrl(apiBaseUrl: string, locale?: string): string 
 // Server-side fetch used by src/pages/drawer.astro. Never throws — a
 // failed/non-2xx fetch (invalid tenant slug, apps/api outage, etc.) is
 // logged via console.error and surfaced to the caller as `null`, so the
-// drawer route can render a minimal fallback instead of crashing the SSR
-// render (issue #11's polished "unavailable" UX is explicitly out of scope
-// for this ticket — just don't let a fetch failure take the page down).
+// drawer route can render DrawerContent's generic "unavailable" fallback
+// (issue #11) instead of crashing the SSR render. The two console.error
+// branches below log distinguishable detail (HTTP status + tenant slug
+// for a non-2xx response vs. the raw thrown error for a network-level
+// failure) even though both collapse to the same customer-facing message
+// and the same `null` return value.
 export async function fetchTenantInfo(
   apiBaseUrl: string,
   tenantSlug: string,
