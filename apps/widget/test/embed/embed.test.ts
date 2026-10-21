@@ -71,3 +71,143 @@ describe("embed.js pure helpers (loaded via vm against the real file)", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// init() DOM wiring (issue #10: data-hide-default-button, data-platform-book,
+// window.Platform.open/close). These need more than the pure-helper sandbox
+// above — a minimal fake DOM capable of recording appendChild calls and
+// firing click listeners — but deliberately stay a plain object literal
+// rather than growing into a real fake-DOM implementation (jsdom etc.),
+// matching the existing convention/comment on loadEmbedModule() above.
+
+interface FakeElement {
+  tagName: string;
+  id: string;
+  dataset: Record<string, string>;
+  style: Record<string, string>;
+  children: FakeElement[];
+  appendChild(child: FakeElement): void;
+  addEventListener(type: string, fn: () => void): void;
+  click(): void;
+}
+
+function createFakeElement(tagName: string): FakeElement {
+  const listeners: Record<string, Array<() => void>> = {};
+  return {
+    tagName,
+    id: "",
+    dataset: {},
+    style: {},
+    children: [],
+    appendChild(child) {
+      this.children.push(child);
+    },
+    addEventListener(type, fn) {
+      (listeners[type] ||= []).push(fn);
+    },
+    click() {
+      (listeners.click || []).forEach((fn) => fn());
+    },
+  };
+}
+
+function createFakeDocument(options: { hideDefaultButton?: boolean; bookElements?: FakeElement[] } = {}) {
+  const bodyChildren: FakeElement[] = [];
+  const currentScript = {
+    src: "",
+    dataset: {
+      tenant: "dentdi",
+      ...(options.hideDefaultButton ? { hideDefaultButton: "" } : {}),
+    },
+  };
+  const bookElements = options.bookElements ?? [];
+  const doc = {
+    currentScript,
+    body: { appendChild: (el: FakeElement) => bodyChildren.push(el) },
+    head: { appendChild: () => {} },
+    createElement: (tag: string) => createFakeElement(tag),
+    getElementById: () => undefined,
+    querySelectorAll: (selector: string) => (selector === "[data-platform-book]" ? bookElements : []),
+  };
+  return { doc, bodyChildren };
+}
+
+function runEmbedModule(doc: unknown) {
+  const source = fs.readFileSync(EMBED_JS_PATH, "utf-8");
+  const sandbox: Record<string, unknown> = { window: {}, document: doc, console, URL };
+  (sandbox.window as Record<string, unknown>).document = doc;
+  vm.createContext(sandbox);
+  vm.runInContext(source, sandbox, { filename: "embed.js" });
+  return (sandbox.window as { Platform: { open(): void; close(): void; isOpen(): boolean } }).Platform;
+}
+
+describe("init() DOM wiring (loaded via vm against the real file)", () => {
+  it("creates the default floating trigger when data-hide-default-button is absent", () => {
+    const { doc, bodyChildren } = createFakeDocument({});
+    runEmbedModule(doc);
+    expect(bodyChildren.some((el) => el.id === "platform-widget-trigger")).toBe(true);
+  });
+
+  it("suppresses the default trigger when data-hide-default-button is present", () => {
+    const { doc, bodyChildren } = createFakeDocument({ hideDefaultButton: true });
+    runEmbedModule(doc);
+    expect(bodyChildren.some((el) => el.id === "platform-widget-trigger")).toBe(false);
+  });
+
+  it("opens the drawer when a [data-platform-book] element is clicked", () => {
+    const bookEl = createFakeElement("button");
+    const { doc } = createFakeDocument({ bookElements: [bookEl] });
+    const platform = runEmbedModule(doc);
+
+    expect(platform.isOpen()).toBe(false);
+    bookEl.click();
+    expect(platform.isOpen()).toBe(true);
+  });
+
+  it("wires multiple [data-platform-book] elements, each independently opening the drawer", () => {
+    const bookA = createFakeElement("a");
+    const bookB = createFakeElement("button");
+    const { doc } = createFakeDocument({ bookElements: [bookA, bookB] });
+    const platform = runEmbedModule(doc);
+
+    bookA.click();
+    expect(platform.isOpen()).toBe(true);
+    platform.close();
+    expect(platform.isOpen()).toBe(false);
+
+    bookB.click();
+    expect(platform.isOpen()).toBe(true);
+  });
+
+  it("exposes window.Platform.open()/close() globally, toggling isOpen()", () => {
+    const { doc } = createFakeDocument({});
+    const platform = runEmbedModule(doc);
+
+    expect(platform.isOpen()).toBe(false);
+    platform.open();
+    expect(platform.isOpen()).toBe(true);
+    platform.close();
+    expect(platform.isOpen()).toBe(false);
+  });
+
+  it("drives the default trigger, a data-platform-book element, and window.Platform.open() through the same open() — one shared iframe, never re-created, across all three call paths", () => {
+    const bookEl = createFakeElement("button");
+    const { doc, bodyChildren } = createFakeDocument({ bookElements: [bookEl] });
+    const platform = runEmbedModule(doc);
+
+    const trigger = bodyChildren.find((el) => el.id === "platform-widget-trigger");
+    trigger!.click();
+
+    const drawer = bodyChildren.find((el) => el.id === "platform-widget-drawer");
+    const iframesAfterTrigger = drawer!.children.filter((c) => c.tagName === "iframe");
+    expect(iframesAfterTrigger).toHaveLength(1);
+    const firstIframe = iframesAfterTrigger[0];
+
+    bookEl.click();
+    platform.open();
+
+    const iframesAfterAll = drawer!.children.filter((c) => c.tagName === "iframe");
+    expect(iframesAfterAll).toHaveLength(1);
+    expect(iframesAfterAll[0]).toBe(firstIframe);
+  });
+});

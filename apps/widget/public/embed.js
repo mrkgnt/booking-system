@@ -183,7 +183,9 @@
       isOpen = false;
     }
 
-    createTrigger(doc, open);
+    if (!config.hideDefaultButton) {
+      createTrigger(doc, open);
+    }
 
     var bookTriggers = doc.querySelectorAll("[data-platform-book]");
     for (var i = 0; i < bookTriggers.length; i++) {
