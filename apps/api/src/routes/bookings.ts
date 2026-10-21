@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { env } from "../config/env.js";
 import { getServiceRoleClient } from "../lib/supabase.js";
 import { hasExistingConflict } from "../lib/booking-conflicts.js";
+import { validateCapabilityToken } from "../lib/booking-tokens.js";
 import { selectMatchingCustomer, type CustomerCandidate } from "../lib/customer-matching.js";
 import { classifySupabaseError, isIdempotencyKeyViolation } from "../lib/pg-errors.js";
 import { generateRawToken, hashToken } from "../lib/tokens.js";
@@ -15,8 +16,6 @@ import {
   createBookingSchema,
   rescheduleBookingSchema,
 } from "./bookings.schema.js";
-
-const FINALIZED_STATUSES = ["cancelled", "completed", "no_show"] as const;
 
 export const bookingsRoute = new Hono<{ Variables: TenantVariables }>();
 
@@ -336,34 +335,15 @@ bookingsRoute.post("/bookings/cancel", tenantMiddleware, rateLimitMiddleware, as
 
   const tenant = c.get("tenant");
   const supabase = getServiceRoleClient(tenant);
-  const tokenHash = hashToken(parsed.data.token);
 
-  const { data: tokenRow } = await supabase
-    .from("booking_verification_tokens")
-    .select("id, booking_id, expires_at, purpose")
-    .eq("token_hash", tokenHash)
-    .eq("purpose", "cancel")
-    .maybeSingle();
-
-  if (!tokenRow || new Date(tokenRow.expires_at) < new Date()) {
-    return c.json({ error: "invalid_or_expired_token" }, 400);
+  const result = await validateCapabilityToken(supabase, parsed.data.token, "cancel");
+  if (!result.ok) {
+    return c.json({ error: result.error }, 400);
   }
-
-  const { data: booking } = await supabase
-    .from("bookings")
-    .select("id, status, starts_at")
-    .eq("id", tokenRow.booking_id)
-    .maybeSingle();
-
-  if (!booking) {
-    return c.json({ error: "invalid_or_expired_token" }, 400);
+  if (result.status !== "valid") {
+    return c.json({ error: result.status }, 409);
   }
-  if (FINALIZED_STATUSES.includes(booking.status as (typeof FINALIZED_STATUSES)[number])) {
-    return c.json({ error: "already_finalized" }, 409);
-  }
-  if (new Date(booking.starts_at) < new Date()) {
-    return c.json({ error: "appointment_already_passed" }, 409);
-  }
+  const booking = result.booking;
 
   const { data: updated, error: updateError } = await supabase
     .from("bookings")
@@ -389,34 +369,15 @@ bookingsRoute.post("/bookings/reschedule", tenantMiddleware, rateLimitMiddleware
 
   const tenant = c.get("tenant");
   const supabase = getServiceRoleClient(tenant);
-  const tokenHash = hashToken(parsed.data.token);
 
-  const { data: tokenRow } = await supabase
-    .from("booking_verification_tokens")
-    .select("id, booking_id, expires_at, purpose")
-    .eq("token_hash", tokenHash)
-    .eq("purpose", "reschedule")
-    .maybeSingle();
-
-  if (!tokenRow || new Date(tokenRow.expires_at) < new Date()) {
-    return c.json({ error: "invalid_or_expired_token" }, 400);
+  const result = await validateCapabilityToken(supabase, parsed.data.token, "reschedule");
+  if (!result.ok) {
+    return c.json({ error: result.error }, 400);
   }
-
-  const { data: booking } = await supabase
-    .from("bookings")
-    .select("id, status, starts_at, staff_id, service_id")
-    .eq("id", tokenRow.booking_id)
-    .maybeSingle();
-
-  if (!booking) {
-    return c.json({ error: "invalid_or_expired_token" }, 400);
+  if (result.status !== "valid") {
+    return c.json({ error: result.status }, 409);
   }
-  if (FINALIZED_STATUSES.includes(booking.status as (typeof FINALIZED_STATUSES)[number])) {
-    return c.json({ error: "already_finalized" }, 409);
-  }
-  if (new Date(booking.starts_at) < new Date()) {
-    return c.json({ error: "appointment_already_passed" }, 409);
-  }
+  const booking = result.booking;
 
   const { data: service } = await supabase
     .from("services")
