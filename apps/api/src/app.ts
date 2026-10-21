@@ -5,6 +5,7 @@ import { healthRoute } from "./routes/health.js";
 import { smokeRoute } from "./routes/_smoke.js";
 import { availabilityRoute } from "./routes/availability.js";
 import { bookingsRoute } from "./routes/bookings.js";
+import { tenantInfoRoute } from "./routes/tenant-info.js";
 import { adminMeRoute } from "./routes/admin-me.js";
 import { adminBookingsRoute } from "./routes/admin-bookings.js";
 import { adminCustomersRoute } from "./routes/admin-customers.js";
@@ -28,10 +29,25 @@ app.use(
   }),
 );
 
+// Wide-open CORS for widget-facing public routes (apps/widget has no
+// Supabase credentials of its own and is embedded on arbitrary third-party
+// origins — see ADR-0004). Deliberately scoped to /public/* only, not a
+// blanket change: /availability and /bookings/* CORS is out of scope here
+// (tracked separately, issue #14).
+app.use(
+  "/public/*",
+  cors({
+    origin: "*",
+    allowHeaders: ["X-Tenant-Slug"],
+    allowMethods: ["GET", "OPTIONS"],
+  }),
+);
+
 app.route("/", healthRoute);
 app.route("/", smokeRoute);
 app.route("/", availabilityRoute);
 app.route("/", bookingsRoute);
+app.route("/", tenantInfoRoute);
 app.route("/", adminMeRoute);
 app.route("/", adminBookingsRoute);
 app.route("/", adminCustomersRoute);
