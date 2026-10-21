@@ -16,6 +16,17 @@ const locale = Astro.url.searchParams.get("locale") ?? undefined;
 // failure UX, this ticket just needs to not crash or block the trigger).
 const tenantInfo = tenantSlug ? await fetchTenantInfo(import.meta.env.API_BASE_URL, tenantSlug, locale) : null;
 ---
+{/* initialLocale mirrors drawer.astro's own locale resolution above: the
+    explicit ?locale= query param if the embed had one, else whatever the
+    SSR fetch actually resolved to (the tenant's default_locale) — passed
+    down so the client-side switcher (issue #13) knows which option is
+    currently active without re-deriving it. */}
 <DrawerLayout title={tenantInfo ? tenantInfo.tenant.name : "Booking"}>
-  <DrawerContent tenantInfo={tenantInfo} />
+  <DrawerContent
+    client:load
+    tenantInfo={tenantInfo}
+    apiBaseUrl={import.meta.env.API_BASE_URL}
+    tenantSlug={tenantSlug ?? ""}
+    initialLocale={locale ?? tenantInfo?.tenant.defaultLocale ?? "en"}
+  />
 </DrawerLayout>
