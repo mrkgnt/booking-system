@@ -7,12 +7,21 @@ import ConfirmedStep from "@/components/booking/ConfirmedStep";
 import { createBooking } from "@/lib/api/booking.js";
 import { initialFlowState, reduceFlowState } from "@/lib/booking/flow-state.js";
 import type { TenantInfo } from "@/lib/api/tenant-info.js";
+import { getMessage, resolveLocale } from "@/lib/i18n/messages.js";
 
 type Props = {
   tenantInfo: TenantInfo | null;
   tenantSlug: string;
   apiBaseUrl: string;
-  locale: "lv" | "ru" | "en";
+  // Validated to "lv" | "ru" | "en" by drawer.astro (createBookingSchema's
+  // own enum, apps/api/src/routes/bookings.schema.ts) whenever tenantInfo
+  // is present, since this value also flows straight into POST /bookings'
+  // payload below. When tenantInfo is null there's no tenant default
+  // locale to validate against, so drawer.astro passes the raw
+  // (possibly-unsupported) requested locale through instead — getMessage's
+  // own resolveLocale call falls back to "en" for anything it doesn't
+  // recognize, same as issue #11 built it.
+  locale: string;
 };
 
 // Every evergreen browser this widget targets has crypto.randomUUID — same
@@ -24,12 +33,13 @@ function generateIdempotencyKey(): string {
 // The actual service → availability → contact → double opt-in confirm
 // booking flow (issue #14), reusing apps/api's existing /availability,
 // /bookings, /bookings/confirm contract unchanged. `tenantInfo === null`
-// means the live /public/tenant-info fetch failed (invalid tenant slug or
-// an apps/api outage, or — as is actually the case for the live "dentdi"
-// tenant at the time this was built — business_profile.status being
-// "onboarding" rather than "active"; see CLAUDE.md) — issue #11 owns the
-// polished "temporarily unavailable" UX, so this intentionally stays
-// minimal rather than guessing at that design now.
+// means the live /public/tenant-info fetch failed — invalid/inactive
+// tenant slug or an apps/api outage (or, as is actually the case for the
+// live "dentdi" tenant at the time this was built, business_profile.status
+// being "onboarding" rather than "active"; see CLAUDE.md) — both
+// converging on the same generic, locale-aware message (issue #11): no
+// tenant-specific contact info, since that data is itself part of what
+// failed to load.
 export default function DrawerContent({ tenantInfo, tenantSlug, apiBaseUrl, locale }: Props) {
   const [state, dispatch] = useReducer(reduceFlowState, initialFlowState());
   const [submitting, setSubmitting] = useState(false);
@@ -38,7 +48,7 @@ export default function DrawerContent({ tenantInfo, tenantSlug, apiBaseUrl, loca
   if (!tenantInfo) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-        <p className="text-sm text-muted-foreground">Booking is temporarily unavailable.</p>
+        <p className="text-sm text-muted-foreground">{getMessage("unavailable", locale)}</p>
       </div>
     );
   }
@@ -51,7 +61,11 @@ export default function DrawerContent({ tenantInfo, tenantSlug, apiBaseUrl, loca
       serviceId: state.serviceId,
       staffId: state.staffId,
       startsAt: state.slot.startsAt,
-      locale,
+      // resolveLocale narrows to createBookingSchema's exact
+      // "lv" | "ru" | "en" enum (same helper issue #11 built for the
+      // unavailable message) — belt-and-suspenders on top of drawer.astro
+      // already validating this before it ever reaches here.
+      locale: resolveLocale(locale),
       customer: contact,
       idempotencyKey: generateIdempotencyKey(),
     });

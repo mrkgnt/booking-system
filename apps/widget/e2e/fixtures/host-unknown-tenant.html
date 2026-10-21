@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Third-party host site (E2E fixture — unknown tenant)</title>
+  </head>
+  <body>
+    <h1>Some Tenant's Existing Website</h1>
+    <p>
+      Same fixture shape as host.html, but with a genuinely unregistered
+      data-tenant slug — used by e2e/unavailable.spec.ts (issue #11) to
+      prove the trigger still renders and the drawer falls back to the
+      generic "temporarily unavailable" message for a tenant slug that
+      doesn't exist in apps/api's tenant registry at all (distinct cause
+      from host.html's real-but-inactive "dentdi" case).
+    </p>
+
+    <script src="__WIDGET_ORIGIN__/embed.js" data-tenant="nonexistent-tenant-xyz"></script>
+  </body>
+</html>
