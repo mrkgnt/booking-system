@@ -8,14 +8,38 @@ import { fetchTenantInfo } from "../lib/api/tenant-info.js";
 // build-time env var (see src/env.d.ts; this is the core architectural
 // difference from apps/admin's one-deployment-per-tenant model).
 const tenantSlug = Astro.url.searchParams.get("tenant");
-const locale = Astro.url.searchParams.get("locale") ?? undefined;
+const requestedLocale = Astro.url.searchParams.get("locale") ?? undefined;
 
 // fetchTenantInfo never throws — a missing/invalid tenant slug or an
 // apps/api outage both resolve to `null` here rather than crashing this
 // SSR render (see its own comment for why: issue #11 owns the polished
 // failure UX, this ticket just needs to not crash or block the trigger).
-const tenantInfo = tenantSlug ? await fetchTenantInfo(import.meta.env.API_BASE_URL, tenantSlug, locale) : null;
+const tenantInfo = tenantSlug
+  ? await fetchTenantInfo(import.meta.env.API_BASE_URL, tenantSlug, requestedLocale)
+  : null;
+
+// createBookingSchema (apps/api/src/routes/bookings.schema.ts) only
+// accepts "lv" | "ru" | "en" — narrow here once, so DrawerContent's booking
+// submission always has a value the contract actually accepts, regardless
+// of what a host page's data-locale attribute or the Tenant's own
+// default_locale happen to contain.
+const SUPPORTED_LOCALES = ["lv", "ru", "en"] as const;
+type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+function isSupportedLocale(value: string | undefined): value is SupportedLocale {
+  return !!value && (SUPPORTED_LOCALES as readonly string[]).includes(value);
+}
+const locale: SupportedLocale = isSupportedLocale(requestedLocale)
+  ? requestedLocale
+  : isSupportedLocale(tenantInfo?.tenant.defaultLocale)
+    ? tenantInfo!.tenant.defaultLocale
+    : "en";
 ---
 <DrawerLayout title={tenantInfo ? tenantInfo.tenant.name : "Booking"}>
-  <DrawerContent tenantInfo={tenantInfo} />
+  <DrawerContent
+    tenantInfo={tenantInfo}
+    tenantSlug={tenantSlug ?? ""}
+    apiBaseUrl={import.meta.env.API_BASE_URL}
+    locale={locale}
+    client:load
+  />
 </DrawerLayout>

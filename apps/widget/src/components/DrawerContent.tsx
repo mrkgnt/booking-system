@@ -1,17 +1,40 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useReducer, useState } from "react";
+import ServiceStep from "@/components/booking/ServiceStep";
+import AvailabilityStep from "@/components/booking/AvailabilityStep";
+import ContactStep, { type ContactInfo } from "@/components/booking/ContactStep";
+import ConfirmPendingStep from "@/components/booking/ConfirmPendingStep";
+import ConfirmedStep from "@/components/booking/ConfirmedStep";
+import { createBooking } from "@/lib/api/booking.js";
+import { initialFlowState, reduceFlowState } from "@/lib/booking/flow-state.js";
 import type { TenantInfo } from "@/lib/api/tenant-info.js";
 
 type Props = {
   tenantInfo: TenantInfo | null;
+  tenantSlug: string;
+  apiBaseUrl: string;
+  locale: "lv" | "ru" | "en";
 };
 
-// This ticket's drawer content is read-only display (tenant name + catalog)
-// — the actual service→availability→contact→confirm booking flow is later
-// tickets' scope (#10+). `tenantInfo === null` means the live fetch failed
-// (invalid tenant slug or an apps/api outage); issue #11 owns the polished
-// "temporarily unavailable" UX, so this intentionally stays minimal rather
-// than guessing at that design now.
-export default function DrawerContent({ tenantInfo }: Props) {
+// Every evergreen browser this widget targets has crypto.randomUUID — same
+// baseline assumption public/embed.js already makes elsewhere in this app.
+function generateIdempotencyKey(): string {
+  return crypto.randomUUID();
+}
+
+// The actual service → availability → contact → double opt-in confirm
+// booking flow (issue #14), reusing apps/api's existing /availability,
+// /bookings, /bookings/confirm contract unchanged. `tenantInfo === null`
+// means the live /public/tenant-info fetch failed (invalid tenant slug or
+// an apps/api outage, or — as is actually the case for the live "dentdi"
+// tenant at the time this was built — business_profile.status being
+// "onboarding" rather than "active"; see CLAUDE.md) — issue #11 owns the
+// polished "temporarily unavailable" UX, so this intentionally stays
+// minimal rather than guessing at that design now.
+export default function DrawerContent({ tenantInfo, tenantSlug, apiBaseUrl, locale }: Props) {
+  const [state, dispatch] = useReducer(reduceFlowState, initialFlowState());
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | undefined>(undefined);
+
   if (!tenantInfo) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
@@ -20,22 +43,95 @@ export default function DrawerContent({ tenantInfo }: Props) {
     );
   }
 
+  async function handleContactSubmit(contact: ContactInfo) {
+    if (state.step !== "contact") return;
+    setSubmitting(true);
+    setSubmitError(undefined);
+    const result = await createBooking(apiBaseUrl, tenantSlug, {
+      serviceId: state.serviceId,
+      staffId: state.staffId,
+      startsAt: state.slot.startsAt,
+      locale,
+      customer: contact,
+      idempotencyKey: generateIdempotencyKey(),
+    });
+    setSubmitting(false);
+    if (result.ok) {
+      dispatch({
+        type: "BOOKING_CREATED",
+        bookingId: String((result.booking as { id?: unknown }).id ?? ""),
+        devConfirmUrl: result.devConfirmUrl,
+      });
+      return;
+    }
+    // The slot can legitimately be taken by someone else between picking
+    // it in AvailabilityStep and submitting contact info here — route back
+    // to availability with a notice (story 13) rather than a dead-end
+    // error, matching the one error apps/api can return for exactly this
+    // (409 slot_unavailable, see bookings.ts).
+    if (result.error === "slot_unavailable") {
+      dispatch({ type: "SLOT_TAKEN" });
+      return;
+    }
+    setSubmitError("Something went wrong — please try again.");
+  }
+
+  function staffForService(serviceId: string) {
+    return tenantInfo!.staff
+      .filter((member) =>
+        tenantInfo!.staffServices.some((link) => link.serviceId === serviceId && link.staffId === member.id),
+      )
+      .map((member) => ({ id: member.id, name: member.name }));
+  }
+
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-6">
       <header>
         <h1 className="text-xl font-semibold">{tenantInfo.tenant.name}</h1>
       </header>
 
-      <div className="flex flex-1 flex-col gap-3">
-        {tenantInfo.services.map((service) => (
-          <Card key={service.id}>
-            <CardHeader>
-              <CardTitle className="text-base">{service.name}</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">{service.durationMinutes} min</CardContent>
-          </Card>
-        ))}
-      </div>
+      {state.step === "service" && (
+        <ServiceStep
+          services={tenantInfo.services}
+          onSelect={(serviceId) => dispatch({ type: "SELECT_SERVICE", serviceId })}
+        />
+      )}
+
+      {state.step === "availability" && (
+        <AvailabilityStep
+          apiBaseUrl={apiBaseUrl}
+          tenantSlug={tenantSlug}
+          serviceId={state.serviceId}
+          staffOptions={staffForService(state.serviceId)}
+          staffId={state.staffId}
+          notice={state.notice}
+          onSelectStaff={(staffId) => dispatch({ type: "SELECT_STAFF", staffId })}
+          onSelectSlot={(slot) => dispatch({ type: "SELECT_SLOT", slot })}
+          onBack={() => dispatch({ type: "BACK" })}
+        />
+      )}
+
+      {state.step === "contact" && (
+        <ContactStep
+          submitting={submitting}
+          error={submitError}
+          onSubmit={handleContactSubmit}
+          onBack={() => dispatch({ type: "BACK" })}
+        />
+      )}
+
+      {state.step === "confirm_pending" && (
+        <ConfirmPendingStep
+          apiBaseUrl={apiBaseUrl}
+          tenantSlug={tenantSlug}
+          devConfirmUrl={state.devConfirmUrl}
+          onConfirmed={() => dispatch({ type: "CONFIRMED" })}
+        />
+      )}
+
+      {state.step === "confirmed" && (
+        <ConfirmedStep slot={state.slot} onRestart={() => dispatch({ type: "RESTART" })} />
+      )}
 
       <footer className="pt-2 text-center text-xs text-muted-foreground">Powered by [Platform]</footer>
     </div>

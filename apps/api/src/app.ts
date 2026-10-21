@@ -45,6 +45,42 @@ app.use(
   }),
 );
 
+// Issue #14: the Drawer's actual booking flow calls these three routes
+// directly (not under /public/*) from the widget's iframe, whose origin is
+// the widget's own deployed origin — still an arbitrary-in-advance origin
+// from apps/api's perspective (one shared apps/widget deployment serves
+// every Tenant's embed), so this needs the same wide-open CORS as
+// /public/*. Scoped to exactly these three paths — NOT a blanket /admin/*
+// change, and deliberately NOT /bookings/cancel or /bookings/reschedule
+// (those are issues #16/#17's scope: the standalone, non-iframe
+// cancel/reschedule pages, not this ticket's). /bookings and
+// /bookings/confirm are POST with a JSON body, so they need
+// Content-Type in allowHeaders in addition to X-Tenant-Slug.
+app.use(
+  "/availability",
+  cors({
+    origin: "*",
+    allowHeaders: ["X-Tenant-Slug"],
+    allowMethods: ["GET", "OPTIONS"],
+  }),
+);
+app.use(
+  "/bookings",
+  cors({
+    origin: "*",
+    allowHeaders: ["Content-Type", "X-Tenant-Slug"],
+    allowMethods: ["POST", "OPTIONS"],
+  }),
+);
+app.use(
+  "/bookings/confirm",
+  cors({
+    origin: "*",
+    allowHeaders: ["Content-Type", "X-Tenant-Slug"],
+    allowMethods: ["POST", "OPTIONS"],
+  }),
+);
+
 app.route("/", healthRoute);
 app.route("/", smokeRoute);
 app.route("/", availabilityRoute);
