@@ -1,0 +1,21 @@
+---
+import DrawerLayout from "../layouts/DrawerLayout.astro";
+import DrawerContent from "../components/DrawerContent.tsx";
+import { fetchTenantInfo } from "../lib/api/tenant-info.js";
+
+// Tenant slug flows per-request from the embed snippet's data-tenant
+// attribute, via embed.js's iframe `src` (?tenant=<slug>) — never a
+// build-time env var (see src/env.d.ts; this is the core architectural
+// difference from apps/admin's one-deployment-per-tenant model).
+const tenantSlug = Astro.url.searchParams.get("tenant");
+const locale = Astro.url.searchParams.get("locale") ?? undefined;
+
+// fetchTenantInfo never throws — a missing/invalid tenant slug or an
+// apps/api outage both resolve to `null` here rather than crashing this
+// SSR render (see its own comment for why: issue #11 owns the polished
+// failure UX, this ticket just needs to not crash or block the trigger).
+const tenantInfo = tenantSlug ? await fetchTenantInfo(import.meta.env.API_BASE_URL, tenantSlug, locale) : null;
+---
+<DrawerLayout title={tenantInfo ? tenantInfo.tenant.name : "Booking"}>
+  <DrawerContent tenantInfo={tenantInfo} />
+</DrawerLayout>

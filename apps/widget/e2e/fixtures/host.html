@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Third-party host site (E2E fixture)</title>
+  </head>
+  <body>
+    <h1>Some Tenant's Existing Website</h1>
+    <p>This static page stands in for an arbitrary third-party site that has installed the Booking Widget.</p>
+
+    <!--
+      The real install snippet: an absolute src pointing at the widget's own
+      deployed origin (not a relative path) — matching how an actual Tenant
+      site, on its own domain, would install it. E2E_WIDGET_ORIGIN is
+      substituted by e2e/helpers.ts before this fixture is loaded, since the
+      widget's local dev port can vary by environment (see astro.config.mjs).
+    -->
+    <script src="__WIDGET_ORIGIN__/embed.js" data-tenant="dentdi"></script>
+  </body>
+</html>
