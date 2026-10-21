@@ -5,6 +5,7 @@ import { healthRoute } from "./routes/health.js";
 import { smokeRoute } from "./routes/_smoke.js";
 import { availabilityRoute } from "./routes/availability.js";
 import { bookingsRoute } from "./routes/bookings.js";
+import { bookingLookupRoute } from "./routes/booking-lookup.js";
 import { adminMeRoute } from "./routes/admin-me.js";
 import { adminBookingsRoute } from "./routes/admin-bookings.js";
 import { adminCustomersRoute } from "./routes/admin-customers.js";
@@ -28,10 +29,26 @@ app.use(
   }),
 );
 
+// Wide-open CORS for public, unauthenticated widget-facing routes under
+// /public/* — the embedding origin is an arbitrary third-party Tenant
+// website, unknown in advance (see ADR-0004 / CLAUDE.md's "Booking Widget
+// embedding mechanism" decision). Does NOT cover /availability or
+// /bookings/* (the mutating booking-creation contract) — that's issue
+// #14's scope, not this route's.
+app.use(
+  "/public/*",
+  cors({
+    origin: "*",
+    allowHeaders: ["X-Tenant-Slug"],
+    allowMethods: ["GET", "OPTIONS"],
+  }),
+);
+
 app.route("/", healthRoute);
 app.route("/", smokeRoute);
 app.route("/", availabilityRoute);
 app.route("/", bookingsRoute);
+app.route("/", bookingLookupRoute);
 app.route("/", adminMeRoute);
 app.route("/", adminBookingsRoute);
 app.route("/", adminCustomersRoute);
