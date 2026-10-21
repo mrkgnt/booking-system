@@ -24,8 +24,8 @@ schema).
 **Customer**:
 A person who books an appointment with a Tenant. The canonical domain
 term, chosen because the product sells to multiple verticals (not just
-dental) and needs one word that fits all of them. The schema's `patients`
-table is being renamed to match (see decision below).
+dental) and needs one word that fits all of them. The schema's `customers`
+table (renamed from `patients` 2026-10-21, ADR-0002).
 _Avoid_: Patient (dental-specific — survives only as a per-tenant
 *display label*, not the domain term), Client (reserved for Tenant-side
 ambiguity, not reused here).
@@ -35,7 +35,9 @@ A per-tenant-configurable UI string that lets staff see vertical-appropriate
 language (e.g. a dental Tenant's staff see "Patients" in their admin UI,
 a salon Tenant's staff see "Clients") even though the underlying domain
 term and schema are generic (`Customer`). Decouples vocabulary from data
-model.
+model. Implemented as `business_profile.site_config.customerLabel`,
+resolved by `resolveCustomerLabel()` (`apps/api/src/lib/customer-label.ts`)
+and exposed via `GET /admin/me`.
 
 **Platform**:
 The product itself — the shared codebase, infrastructure pattern, and

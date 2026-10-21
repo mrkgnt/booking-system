@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { env } from "../config/env.js";
 import { getServiceRoleClient } from "../lib/supabase.js";
 import { hasExistingConflict } from "../lib/booking-conflicts.js";
-import { selectMatchingPatient, type PatientCandidate } from "../lib/patient-matching.js";
+import { selectMatchingCustomer, type CustomerCandidate } from "../lib/customer-matching.js";
 import { classifySupabaseError, isIdempotencyKeyViolation } from "../lib/pg-errors.js";
 import { generateRawToken, hashToken } from "../lib/tokens.js";
 import { sendManagementLinks, sendVerificationLink } from "../lib/notifications.js";
@@ -107,51 +107,51 @@ bookingsRoute.post("/bookings", tenantMiddleware, rateLimitMiddleware, async (c)
     return c.json({ error: "slot_unavailable" }, 409);
   }
 
-  // Patient find-or-create.
+  // Customer find-or-create.
   const orFilters = [
-    input.patient.email ? `email.eq.${input.patient.email}` : null,
-    input.patient.phone ? `phone.eq.${input.patient.phone}` : null,
+    input.customer.email ? `email.eq.${input.customer.email}` : null,
+    input.customer.phone ? `phone.eq.${input.customer.phone}` : null,
   ].filter((f): f is string => f !== null);
   const { data: candidateRows } = await supabase
-    .from("patients")
+    .from("customers")
     .select("id, email, phone, created_at")
     .or(orFilters.join(","));
-  const candidates: PatientCandidate[] = (candidateRows ?? []).map((p) => ({
-    id: p.id,
-    email: p.email,
-    phone: p.phone,
-    createdAt: p.created_at,
+  const candidates: CustomerCandidate[] = (candidateRows ?? []).map((row) => ({
+    id: row.id,
+    email: row.email,
+    phone: row.phone,
+    createdAt: row.created_at,
   }));
-  const matchedPatient = selectMatchingPatient(candidates, {
-    email: input.patient.email,
-    phone: input.patient.phone,
+  const matchedCustomer = selectMatchingCustomer(candidates, {
+    email: input.customer.email,
+    phone: input.customer.phone,
   });
 
-  let patientId: string;
-  if (matchedPatient) {
-    patientId = matchedPatient.id;
+  let customerId: string;
+  if (matchedCustomer) {
+    customerId = matchedCustomer.id;
   } else {
-    const { data: newPatient, error: patientError } = await supabase
-      .from("patients")
+    const { data: newCustomer, error: customerError } = await supabase
+      .from("customers")
       .insert({
-        name: input.patient.name,
-        email: input.patient.email,
-        phone: input.patient.phone,
+        name: input.customer.name,
+        email: input.customer.email,
+        phone: input.customer.phone,
         preferred_locale: input.locale,
       })
       .select("id")
       .single();
-    if (patientError || !newPatient) {
-      const { httpStatus, body } = classifySupabaseError(patientError ?? {});
+    if (customerError || !newCustomer) {
+      const { httpStatus, body } = classifySupabaseError(customerError ?? {});
       return c.json(body, httpStatus as 409 | 500);
     }
-    patientId = newPatient.id;
+    customerId = newCustomer.id;
   }
 
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
     .insert({
-      patient_id: patientId,
+      customer_id: customerId,
       service_id: input.serviceId,
       staff_id: staffId,
       starts_at: startsAt.toISOString(),
@@ -193,8 +193,8 @@ bookingsRoute.post("/bookings", tenantMiddleware, rateLimitMiddleware, async (c)
   });
 
   const confirmUrl = `${env.NODE_ENV === "production" ? "" : "http://localhost:" + env.PORT}/bookings/confirm?token=${rawToken}`;
-  const channel: "email" | "sms" = input.patient.email ? "email" : "sms";
-  const to = input.patient.email ?? input.patient.phone ?? "";
+  const channel: "email" | "sms" = input.customer.email ? "email" : "sms";
+  const to = input.customer.email ?? input.customer.phone ?? "";
 
   const sendResult = await sendVerificationLink({ channel, to, confirmUrl, locale: input.locale });
 
@@ -281,13 +281,13 @@ bookingsRoute.post("/bookings/confirm", tenantMiddleware, async (c) => {
   const cancelUrl = `${origin}/bookings/cancel?token=${cancelRawToken}`;
   const rescheduleUrl = `${origin}/bookings/reschedule?token=${rescheduleRawToken}`;
 
-  const { data: patient } = await supabase
-    .from("patients")
+  const { data: customer } = await supabase
+    .from("customers")
     .select("email, phone")
-    .eq("id", booking.patient_id)
+    .eq("id", booking.customer_id)
     .maybeSingle();
-  const channel: "email" | "sms" = patient?.email ? "email" : "sms";
-  const to = patient?.email ?? patient?.phone ?? "";
+  const channel: "email" | "sms" = customer?.email ? "email" : "sms";
+  const to = customer?.email ?? customer?.phone ?? "";
 
   const sendResult = await sendManagementLinks({
     channel,

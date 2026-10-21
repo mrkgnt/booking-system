@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { hasExistingConflict } from "../lib/booking-conflicts.js";
 import type { Json } from "../lib/database.types.js";
 import { classifySupabaseError } from "../lib/pg-errors.js";
-import { selectMatchingPatient, type PatientCandidate } from "../lib/patient-matching.js";
+import { selectMatchingCustomer, type CustomerCandidate } from "../lib/customer-matching.js";
 import { staffAuthMiddleware, type StaffAuthVariables } from "../middleware/staffAuth.js";
 import { tenantMiddleware, type TenantVariables } from "../middleware/tenant.js";
 import {
@@ -66,49 +66,49 @@ adminBookingsRoute.post("/admin/bookings", tenantMiddleware, staffAuthMiddleware
   }
 
   const orFilters = [
-    input.patient.email ? `email.eq.${input.patient.email}` : null,
-    input.patient.phone ? `phone.eq.${input.patient.phone}` : null,
+    input.customer.email ? `email.eq.${input.customer.email}` : null,
+    input.customer.phone ? `phone.eq.${input.customer.phone}` : null,
   ].filter((f): f is string => f !== null);
   const { data: candidateRows } = await supabase
-    .from("patients")
+    .from("customers")
     .select("id, email, phone, created_at")
     .or(orFilters.join(","));
-  const candidates: PatientCandidate[] = (candidateRows ?? []).map((p) => ({
-    id: p.id,
-    email: p.email,
-    phone: p.phone,
-    createdAt: p.created_at,
+  const candidates: CustomerCandidate[] = (candidateRows ?? []).map((row) => ({
+    id: row.id,
+    email: row.email,
+    phone: row.phone,
+    createdAt: row.created_at,
   }));
-  const matchedPatient = selectMatchingPatient(candidates, {
-    email: input.patient.email,
-    phone: input.patient.phone,
+  const matchedCustomer = selectMatchingCustomer(candidates, {
+    email: input.customer.email,
+    phone: input.customer.phone,
   });
 
-  let patientId: string;
-  if (matchedPatient) {
-    patientId = matchedPatient.id;
+  let customerId: string;
+  if (matchedCustomer) {
+    customerId = matchedCustomer.id;
   } else {
-    const { data: newPatient, error: patientError } = await supabase
-      .from("patients")
+    const { data: newCustomer, error: customerError } = await supabase
+      .from("customers")
       .insert({
-        name: input.patient.name,
-        email: input.patient.email,
-        phone: input.patient.phone,
+        name: input.customer.name,
+        email: input.customer.email,
+        phone: input.customer.phone,
         preferred_locale: input.locale,
       })
       .select("id")
       .single();
-    if (patientError || !newPatient) {
-      const { httpStatus, body } = classifySupabaseError(patientError ?? {});
+    if (customerError || !newCustomer) {
+      const { httpStatus, body } = classifySupabaseError(customerError ?? {});
       return c.json(body, httpStatus as 409 | 500);
     }
-    patientId = newPatient.id;
+    customerId = newCustomer.id;
   }
 
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
     .insert({
-      patient_id: patientId,
+      customer_id: customerId,
       service_id: input.serviceId,
       staff_id: input.staffId,
       starts_at: startsAt.toISOString(),

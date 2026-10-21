@@ -6,6 +6,7 @@ import { listBookings } from "../lib/api/bookings.js";
 import { listBusinessHours } from "../lib/api/business-hours.js";
 import { listClosures } from "../lib/api/closures.js";
 import { getWeekDays, getWeekStart, toDateKey } from "../lib/dashboard/date-utils.js";
+import { getMe } from "../lib/api/me.js";
 
 const session = Astro.locals.session!;
 const apiConfig = {
@@ -21,15 +22,16 @@ from.setHours(0, 0, 0, 0);
 const to = new Date(weekDays[6]);
 to.setHours(23, 59, 59, 999);
 
-const [staff, bookings, businessHours, closures] = await Promise.all([
+const [staff, bookings, businessHours, closures, me] = await Promise.all([
   listStaff(apiConfig),
   listBookings(apiConfig, { from: from.toISOString(), to: to.toISOString() }),
   listBusinessHours(apiConfig, null),
   listClosures(apiConfig, null),
+  getMe(apiConfig),
 ]);
 ---
 
-<AdminLayout title="Dashboard">
+<AdminLayout title="Dashboard" customerLabel={me.customerLabel}>
   <DashboardScreen
     client:load
     apiConfig={apiConfig}

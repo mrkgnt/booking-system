@@ -47,7 +47,7 @@ describe("POST /bookings — validation and tenant resolution", () => {
         serviceId: "00000000-0000-0000-0000-000000000001",
         startsAt: "2027-03-01T10:00:00.000Z",
         locale: "en",
-        patient: { name: "Test Patient", email: "test@example.com" },
+        customer: { name: "Test Customer", email: "test@example.com" },
         idempotencyKey: "test-idempotency-key-1",
       }),
     });
@@ -62,7 +62,7 @@ describe("POST /bookings — validation and tenant resolution", () => {
         serviceId: "00000000-0000-0000-0000-000000000001",
         startsAt: "2027-03-01T10:00:00.000Z",
         locale: "en",
-        patient: { name: "Test Patient" },
+        customer: { name: "Test Customer" },
         consentGiven: true,
         idempotencyKey: "test-idempotency-key-2",
       }),

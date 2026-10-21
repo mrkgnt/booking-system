@@ -5,7 +5,7 @@ describe("sendVerificationLink (stub)", () => {
   it("returns an honest 'failed: no provider configured' result", async () => {
     const result = await sendVerificationLink({
       channel: "email",
-      to: "patient@example.com",
+      to: "customer@example.com",
       confirmUrl: "https://example.com/confirm?token=abc",
       locale: "en",
     });
@@ -31,7 +31,7 @@ describe("sendManagementLinks (stub)", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const result = await sendManagementLinks({
       channel: "email",
-      to: "patient@example.com",
+      to: "customer@example.com",
       cancelUrl: "https://example.com/bookings/cancel?token=abc",
       rescheduleUrl: "https://example.com/bookings/reschedule?token=def",
       locale: "en",

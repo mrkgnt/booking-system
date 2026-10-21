@@ -4,33 +4,34 @@ import { cancelBooking, forceBookBooking, listBookings, rescheduleBooking, type 
 import type { Service, StaffMember } from "../lib/api/catalog.js";
 import { describeApiError } from "../lib/api/errors.js";
 import { validateForceBookForm, type ForceBookFormValues } from "../lib/api/validate-force-book.js";
+import { DEFAULT_CUSTOMER_LABEL, type CustomerLabel } from "../lib/api/me.js";
 import { formatBookingTime, toDatetimeLocalValue } from "../lib/format.js";
 
 const STATUSES: BookingStatus[] = ["pending_verification", "confirmed", "completed", "cancelled", "no_show"];
 
-type Props = { apiConfig: ApiClientConfig; services: Service[]; staff: StaffMember[] };
+type Props = { apiConfig: ApiClientConfig; services: Service[]; staff: StaffMember[]; customerLabel?: CustomerLabel };
 
-export default function BookingsScreen({ apiConfig, services, staff }: Props) {
+export default function BookingsScreen({ apiConfig, services, staff, customerLabel = DEFAULT_CUSTOMER_LABEL }: Props) {
   const [filters, setFilters] = useState<ListBookingsFilters>({});
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formValues, setFormValues] = useState<ForceBookFormValues>({
-    serviceId: "", staffId: "", startsAt: "", locale: "lv", patientName: "", patientEmail: "", patientPhone: "",
+    serviceId: "", staffId: "", startsAt: "", locale: "lv", customerName: "", customerEmail: "", customerPhone: "",
   });
   const [formErrors, setFormErrors] = useState<string[]>([]);
 
   async function handleForceBook(e: React.FormEvent) {
     e.preventDefault();
-    const errors = validateForceBookForm(formValues);
+    const errors = validateForceBookForm(formValues, customerLabel);
     setFormErrors(errors);
     if (errors.length > 0) return;
     try {
       await forceBookBooking(apiConfig, {
         serviceId: formValues.serviceId, staffId: formValues.staffId,
         startsAt: new Date(formValues.startsAt).toISOString(), locale: formValues.locale as "lv" | "ru" | "en",
-        patient: { name: formValues.patientName, email: formValues.patientEmail || undefined, phone: formValues.patientPhone || undefined },
+        customer: { name: formValues.customerName, email: formValues.customerEmail || undefined, phone: formValues.customerPhone || undefined },
       });
       setShowForm(false);
       await refresh();
@@ -156,9 +157,9 @@ export default function BookingsScreen({ apiConfig, services, staff }: Props) {
             {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <input type="datetime-local" value={formValues.startsAt} onChange={(e) => setFormValues((v) => ({ ...v, startsAt: e.target.value }))} />
-          <input placeholder="Patient name" value={formValues.patientName} onChange={(e) => setFormValues((v) => ({ ...v, patientName: e.target.value }))} />
-          <input placeholder="Email" value={formValues.patientEmail} onChange={(e) => setFormValues((v) => ({ ...v, patientEmail: e.target.value }))} />
-          <input placeholder="Phone" value={formValues.patientPhone} onChange={(e) => setFormValues((v) => ({ ...v, patientPhone: e.target.value }))} />
+          <input placeholder={`${customerLabel.singular} name`} value={formValues.customerName} onChange={(e) => setFormValues((v) => ({ ...v, customerName: e.target.value }))} />
+          <input placeholder="Email" value={formValues.customerEmail} onChange={(e) => setFormValues((v) => ({ ...v, customerEmail: e.target.value }))} />
+          <input placeholder="Phone" value={formValues.customerPhone} onChange={(e) => setFormValues((v) => ({ ...v, customerPhone: e.target.value }))} />
           <button type="submit" className="rounded bg-gray-900 px-3 py-2 text-sm text-white">Book</button>
         </form>
       )}

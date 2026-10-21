@@ -165,7 +165,7 @@ create table closures (
 -- 6. BOOKING CORE
 -- ============================================================================
 
-create table patients (
+create table customers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   email text,
@@ -178,12 +178,12 @@ create table patients (
   updated_at timestamptz not null default now()
 );
 
-create index idx_patients_phone on patients (phone);
-create index idx_patients_email on patients (email);
+create index idx_customers_phone on customers (phone);
+create index idx_customers_email on customers (email);
 
 create table bookings (
   id uuid primary key default gen_random_uuid(),
-  patient_id uuid not null references patients(id) on delete cascade,
+  customer_id uuid not null references customers(id) on delete cascade,
   service_id uuid not null references services(id),
   staff_id uuid references staff(id),
   starts_at timestamptz not null,
@@ -207,7 +207,7 @@ create table bookings (
 );
 
 create index idx_bookings_time on bookings (staff_id, starts_at, ends_at);
-create index idx_bookings_patient on bookings (patient_id);
+create index idx_bookings_customer on bookings (customer_id);
 
 -- Prevents two active (not cancelled/no_show) bookings for the same staff
 -- member from occupying overlapping time ranges — closes the double-booking
@@ -316,7 +316,7 @@ create trigger trg_business_profile_updated_at before update on business_profile
   for each row execute function set_updated_at();
 create trigger trg_services_updated_at before update on services
   for each row execute function set_updated_at();
-create trigger trg_patients_updated_at before update on patients
+create trigger trg_customers_updated_at before update on customers
   for each row execute function set_updated_at();
 create trigger trg_bookings_updated_at before update on bookings
   for each row execute function set_updated_at();
@@ -359,7 +359,7 @@ alter table staff enable row level security;
 alter table staff_services enable row level security;
 alter table business_hours enable row level security;
 alter table closures enable row level security;
-alter table patients enable row level security;
+alter table customers enable row level security;
 alter table bookings enable row level security;
 alter table booking_verification_tokens enable row level security;
 alter table audit_log enable row level security;
@@ -392,7 +392,7 @@ create policy "members access business_hours" on business_hours
   for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access closures" on closures
   for all to authenticated using (is_active_member()) with check (is_active_member());
-create policy "members access patients" on patients
+create policy "members access customers" on customers
   for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access bookings" on bookings
   for all to authenticated using (is_active_member()) with check (is_active_member());
@@ -423,7 +423,7 @@ grant select, insert, update, delete on staff to authenticated;
 grant select, insert, update, delete on staff_services to authenticated;
 grant select, insert, update, delete on business_hours to authenticated;
 grant select, insert, update, delete on closures to authenticated;
-grant select, insert, update, delete on patients to authenticated;
+grant select, insert, update, delete on customers to authenticated;
 grant select, insert, update, delete on bookings to authenticated;
 grant select, insert, update, delete on booking_verification_tokens to authenticated;
 grant select, insert, update, delete on audit_log to authenticated;
@@ -439,7 +439,7 @@ grant select, insert, update, delete on external_busy_blocks to authenticated;
 -- than proxying reads through the backend API — nothing in these tables is
 -- sensitive (service names/prices, staff names, business hours), so this
 -- trades no real security for a simpler/faster public read path. Everything
--- patient/booking-related stays fully locked to authenticated members only
+-- customer/booking-related stays fully locked to authenticated members only
 -- (no grant to anon at all, above).
 
 grant select on service_categories to anon;
@@ -460,7 +460,7 @@ create policy "public read business_hours" on business_hours
 
 -- Scoped to known public-content entity types, so a future entity_type
 -- isn't accidentally made public by default (secure-by-default, not
--- open-by-default) — nothing patient/booking-related is expected to ever
+-- open-by-default) — nothing customer/booking-related is expected to ever
 -- live in this table, but the allowlist protects against that regardless.
 create policy "public read catalog translations" on translations
   for select to anon

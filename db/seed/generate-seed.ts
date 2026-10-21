@@ -45,7 +45,7 @@ type Service = {
   displayOrder: number;
 };
 type Staff = { id: string; name: string; isBookable: boolean; displayOrder: number };
-type Patient = {
+type Customer = {
   id: string;
   name: string;
   email: string;
@@ -54,7 +54,7 @@ type Patient = {
 };
 type Booking = {
   id: string;
-  patientId: string;
+  customerId: string;
   serviceId: string;
   staffId: string;
   startsAt: Date;
@@ -103,7 +103,7 @@ const staff: Staff[] = [
 ];
 const [dentist, nurse] = staff;
 
-const patients: Patient[] = Array.from({ length: 18 }, () => {
+const customers: Customer[] = Array.from({ length: 18 }, () => {
   const locale = faker.helpers.arrayElement(LOCALES);
   return {
     id: faker.string.uuid(),
@@ -117,7 +117,7 @@ const patients: Patient[] = Array.from({ length: 18 }, () => {
 const bookings: Booking[] = [];
 const now = new Date("2026-08-13T09:00:00Z");
 for (let i = 0; i < 28; i++) {
-  const patient = faker.helpers.arrayElement(patients);
+  const customer = faker.helpers.arrayElement(customers);
   const service = faker.helpers.arrayElement(services);
   const bookedStaff = faker.helpers.arrayElement(
     service.durationMinutes <= 30 ? staff : [dentist],
@@ -135,12 +135,12 @@ for (let i = 0; i < 28; i++) {
 
   bookings.push({
     id: faker.string.uuid(),
-    patientId: patient.id,
+    customerId: customer.id,
     serviceId: service.id,
     staffId: bookedStaff.id,
     startsAt,
     endsAt,
-    locale: patient.preferredLocale,
+    locale: customer.preferredLocale,
     status,
     source: faker.helpers.arrayElement(["public", "public", "public", "admin_manual"]),
     idempotencyKey: faker.string.uuid(),
@@ -221,10 +221,10 @@ for (let day = 0; day <= 6; day++) {
 }
 lines.push("");
 
-lines.push("-- Patients");
-for (const p of patients) {
+lines.push("-- Customers");
+for (const c of customers) {
   lines.push(
-    `insert into patients (id, name, email, phone, preferred_locale, consent_given_at) values (${esc(p.id)}, ${esc(p.name)}, ${esc(p.email)}, ${esc(p.phone)}, ${esc(p.preferredLocale)}, now());`,
+    `insert into customers (id, name, email, phone, preferred_locale, consent_given_at) values (${esc(c.id)}, ${esc(c.name)}, ${esc(c.email)}, ${esc(c.phone)}, ${esc(c.preferredLocale)}, now());`,
   );
 }
 lines.push("");
@@ -232,7 +232,7 @@ lines.push("");
 lines.push("-- Bookings");
 for (const b of bookings) {
   lines.push(
-    `insert into bookings (id, patient_id, service_id, staff_id, starts_at, ends_at, locale, status, source, idempotency_key, consent_given_at) values (${esc(b.id)}, ${esc(b.patientId)}, ${esc(b.serviceId)}, ${esc(b.staffId)}, ${esc(b.startsAt.toISOString())}, ${esc(b.endsAt.toISOString())}, ${esc(b.locale)}, ${esc(b.status)}, ${esc(b.source)}, ${esc(b.idempotencyKey)}, now());`,
+    `insert into bookings (id, customer_id, service_id, staff_id, starts_at, ends_at, locale, status, source, idempotency_key, consent_given_at) values (${esc(b.id)}, ${esc(b.customerId)}, ${esc(b.serviceId)}, ${esc(b.staffId)}, ${esc(b.startsAt.toISOString())}, ${esc(b.endsAt.toISOString())}, ${esc(b.locale)}, ${esc(b.status)}, ${esc(b.source)}, ${esc(b.idempotencyKey)}, now());`,
   );
 }
 lines.push("");
@@ -256,5 +256,5 @@ const outPath = resolve(dirname(fileURLToPath(import.meta.url)), "../seed.sql");
 writeFileSync(outPath, lines.join("\n") + "\n");
 console.log(`Wrote ${outPath}`);
 console.log(
-  `${categories.length} categories, ${services.length} services, ${staff.length} staff, ${patients.length} patients, ${bookings.length} bookings`,
+  `${categories.length} categories, ${services.length} services, ${staff.length} staff, ${customers.length} customers, ${bookings.length} bookings`,
 );

@@ -50,7 +50,7 @@ test("force-book rejects a conflicting slot with a visible error, and doesn't du
   await expect(row.first().getByRole("button", { name: "Cancel" })).toHaveCount(0);
 });
 
-test("force-book form blocks submission with missing patient contact info", async ({ page }) => {
+test("force-book form blocks submission with missing customer contact info", async ({ page }) => {
   await login(page, OWNER_EMAIL!, OWNER_PASSWORD!);
 
   // Login now lands on the Dashboard — navigate to Bookings via the nav
@@ -62,7 +62,8 @@ test("force-book form blocks submission with missing patient contact info", asyn
   await page.getByRole("combobox").nth(2).selectOption({ index: 1 });
   await page.getByRole("combobox").nth(3).selectOption({ index: 1 });
   await page.locator('input[type="datetime-local"]').first().fill("2032-04-10T09:00");
-  // Patient name and email/phone all left blank.
+  // Customer name and email/phone all left blank (Dent Di's configured
+  // customerLabel renders these fields as "Patient" — see customers.spec.ts).
   await page.getByRole("button", { name: "Book" }).click();
 
   await expect(page.getByText("Patient name is required.")).toBeVisible();

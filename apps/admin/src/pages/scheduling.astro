@@ -3,6 +3,7 @@ import AdminLayout from "../layouts/AdminLayout.astro";
 import SchedulingScreen from "../components/SchedulingScreen.tsx";
 import { listBusinessHours } from "../lib/api/business-hours.js";
 import { listStaff } from "../lib/api/catalog.js";
+import { getMe } from "../lib/api/me.js";
 
 const session = Astro.locals.session!;
 const apiConfig = {
@@ -10,8 +11,8 @@ const apiConfig = {
   tenantSlug: import.meta.env.TENANT_SLUG,
   accessToken: session.accessToken,
 };
-const [hours, staff] = await Promise.all([listBusinessHours(apiConfig), listStaff(apiConfig)]);
+const [hours, staff, me] = await Promise.all([listBusinessHours(apiConfig), listStaff(apiConfig), getMe(apiConfig)]);
 ---
-<AdminLayout title="Scheduling">
+<AdminLayout title="Scheduling" customerLabel={me.customerLabel}>
   <SchedulingScreen client:load apiConfig={apiConfig} hours={hours} staff={staff} />
 </AdminLayout>

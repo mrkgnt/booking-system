@@ -285,6 +285,46 @@ detail: see `PROJECT_CONTEXT.md`.
       missing `required` attributes on inline-edit fields, one
       data-loading-pattern inconsistency in `ClosuresPanel`, one missing
       button-disabled state — non-blocking, tracked in review history.
+- [x] **`patients` → `customers` rename, ADR-0002** (2026-10-21, via
+      `/tdd`). The full stack: live schema migration on the Dent Di
+      project (table/column/index/trigger/policy renamed, grants/RLS
+      carried over automatically since they're tied to the table's OID,
+      not its name); `db/tenant-schema.sql` + seed scripts + schema
+      tests updated to match; `apps/api`'s matching lib, public booking
+      contract (`POST /bookings`'s `patient` field → `customer` — a
+      genuine breaking contract change, judged safe since `apps/site`
+      doesn't exist yet to call it), admin force-book, and the
+      `/admin/patients` → `/admin/customers` route all renamed;
+      `apps/admin`'s pages/components/API client renamed to match. New
+      behavior (not just a rename): a `resolveCustomerLabel()` resolver
+      (`business_profile.site_config.customerLabel`, default
+      `{"Customer","Customers"}`) now threads a per-Tenant display label
+      through every staff-facing string (nav, screen title, search/
+      empty-state text, back-link, force-book placeholder, validation
+      message) via `GET /admin/me`'s new `customerLabel` field — TDD'd
+      as the one real red→green slice in this task, everything else
+      was a mechanical rename backed by the existing suites.
+      108/108 api vitest (+4 net: `patient-matching.test.ts` swapped for
+      `customer-matching.test.ts`, +`customer-label.test.ts`'s 4 cases),
+      clean `tsc`; 44/44 admin vitest (+1:
+      `validate-force-book.test.ts`'s label case), clean `astro check`/
+      `tsc`. Live-verified: `db/tests/schema_tests.sql` run manually via
+      the Supabase dashboard (the MCP `execute_sql`/`apply_migration`
+      tools' own destructive-statement confirmation gate declined every
+      attempt from this session — DDL-only `apply_migration` calls went
+      through fine, but anything with `insert`/`update`/`delete` did
+      not, with no way to satisfy that confirmation from here), 17/17
+      passing. **Live-verified** (2026-10-21): Dent Di's
+      `business_profile.site_config.customerLabel` set to
+      `{"singular":"Patient","plural":"Patients"}` (user-run, same
+      dashboard-confirmation-gate as the schema test run), then the full
+      Playwright suite run against live dev servers —
+      `customers.spec.ts`'s both tests pass clean. 2 unrelated failures
+      surfaced in that same run (`catalog-services.spec.ts` stale-row
+      timing, a `dashboard.spec.ts` date-picker test hitting the
+      already-documented transient `staffAuthMiddleware` flakiness under
+      concurrent workers) — pre-existing flakiness patterns, not caused
+      by this rename, not yet re-investigated.
 
 ## Decisions Log (running — append, don't rewrite history)
 
@@ -321,7 +361,7 @@ detail: see `PROJECT_CONTEXT.md`.
 | Admin E2E suite — browser-verified | All 8 specs (10 tests) run repeatably green against real dev servers + the live Dent Di project, on a machine with normal network access — the earlier "sandbox has no network egress" caveat was specific to one prior execution environment, not a lasting constraint, and has been removed from this file. Getting a clean run surfaced and fixed 3 real backend bugs (CORS missing `PUT`; a false-404-on-translation-only-PATCH bug in `admin-service-categories.ts`/`admin-services.ts`/`admin-staff.ts`) and 5 Playwright-only bugs (stale row locators post-edit-render, `Date.now() % 27` date-label collisions with leftover rows, a strict-mode collision with the astro dev toolbar's hidden props dump, a weak save-button settle signal) — none were real UI defects. |
 | Operating model (productization) | **Agency-managed, not self-serve** (ADR-0001) — every Tenant is sold and onboarded by hand, indefinitely; no signup/trial flow or automated tenant provisioning is planned. Full concept in `PRODUCT.md`. |
 | Target customer (ICP) | Confirmed broad, not narrowed: staff-based appointment businesses generally (dental/medical, grooming, salons, hairdressers), not medical-only. |
-| Domain terminology | **Tenant** is the canonical term for a subscribing business (schema keeps `business_profile`/"Business" as the same concept, unrenamed). **Customer** is the canonical term for the Tenant's own end customer, replacing dental-specific "Patient" as domain language, with a per-Tenant-configurable *display label* so staff still see vertical-appropriate wording (ADR-0002; schema rename **pending implementation**). Platform's own product name not yet chosen. See `GLOSSARY.md`. |
+| Domain terminology | **Tenant** is the canonical term for a subscribing business (schema keeps `business_profile`/"Business" as the same concept, unrenamed). **Customer** is the canonical term for the Tenant's own end customer, replacing dental-specific "Patient" as domain language, with a per-Tenant-configurable *display label* so staff still see vertical-appropriate wording (ADR-0002, **implemented** 2026-10-21 — schema/code renamed, `resolveCustomerLabel()` mechanism built and wired through the admin UI). Platform's own product name not yet chosen. See `GLOSSARY.md`. |
 | CRM/CMS feature scope (productization) | CRM stays lightweight for v1 (profile + booking history + staff notes; no pipelines/campaigns/segmentation). CMS stays developer-configured at onboarding (no client-facing content/theme editor). Both can expand later on real demand, but new features must stay config-driven/generic in shape even when a specific Tenant (Dent Di) drives the request first — not dentistry-hardcoded. |
 | Platform branding | Public booking widget/site carries a light "powered by [Platform]" credit; staff-facing admin backend stays neutral/unbranded. |
 | Pricing & billing | One-time Setup fee + recurring Monthly fee (hosting/infra + maintenance + minor config tweaks bundled; net-new features billed separately), both invoiced through Stripe operationally (dashboard-driven) — no Stripe webhook integration built into `apps/api`. No tiered packages yet. |
@@ -331,6 +371,8 @@ detail: see `PROJECT_CONTEXT.md`.
 | Tenant contract / DPA | A standard, reusable contract/DPA template, signed identically by every Tenant — not improvised per client. States the termination/grace-period and data-retention terms above; Tenant is Data Controller, Platform is Data Processor. |
 | Internal tenant tracking | Stays a spreadsheet (Tenant name, Supabase project ref, contract/billing status) rather than an in-app back-office tool, until tenant count makes manual tracking unwieldy. |
 | Geographic scope (productization) | Implicitly Latvia/Baltics-focused (EUR, Latvian-aware contract language) for now; expand opportunistically rather than building region-agnostic billing/legal infrastructure speculatively. |
+| E2E credential loading | `apps/admin/playwright.config.ts` calls Node's built-in `process.loadEnvFile()` (Node 20.12+/22+, no new dependency) before `defineConfig`, so `E2E_OWNER_EMAIL`/`E2E_OWNER_PASSWORD` load from `apps/admin/.env` automatically — `pnpm test:e2e` alone now works, no more prefixing the command with inline env vars every run. Falls back to real environment variables (e.g. CI secrets) if `.env` doesn't exist. |
+| E2E flakiness diagnosed & fixed (2026-10-21) | Three distinct causes, all test-only (no app code changed), found via `/diagnosing-bugs`' tight-loop discipline (isolated single-spec reruns first, then repeated full-suite reruns to get a reproduction rate) rather than theorizing from the component code first: (1) `customers.spec.ts`'s save-then-`page.reload()` step had no wait for the PATCH to actually land — `page.reload()` does a one-shot SSR read with no polling safety net, so a late-landing save showed a stale value for the full timeout; fixed with `page.waitForResponse(...)`, the pattern `scheduling-hours.spec.ts` already used. (2) its "search filters" test asserted an *exact* total row count against live data other specs concurrently mutate via force-book's customer find-or-create — loosened to `toBeGreaterThanOrEqual`. (3) `catalog-services.spec.ts`/`catalog-categories.spec.ts` delete-then-assert races were genuine load contention, not a logic bug — confirmed by `catalog-services.spec.ts` running 6/6 clean in isolation but intermittently failing only under full 6-worker parallel load, with the *same* symptom later landing on `catalog-categories.spec.ts` instead in a different run (one shared local dev server under contention, not a defect in either panel); fixed by raising Playwright's default assertion timeout from 5s to 10s (`expect: { timeout: 10_000 }`). Verified: 4 consecutive full-suite reruns, 15/15 passing each time. |
 
 ## Open / Non-Blocking Items
 
@@ -390,11 +432,9 @@ detail: see `PROJECT_CONTEXT.md`.
   backend change, out of scope for UI work.
 - **Productization follow-ups from the `PRODUCT.md` concept pass**
   (2026-10-21), none blocking Dent Di's current build:
-  - `patients` → `customers` schema/code rename + per-Tenant
-    display-label mechanism (ADR-0002) — decided, not yet implemented.
-    Touches the schema, generated types, `admin-patients.ts` and
-    similar routes, the admin UI's Patients screen, and
-    `patients.spec.ts`.
+  - ~~`patients` → `customers` schema/code rename + per-Tenant
+    display-label mechanism (ADR-0002)~~ — **done** (2026-10-21, via
+    `/tdd`). See the dedicated build-stage entry below.
   - Platform product name — not yet chosen.
   - Onboarding runbook (Supabase project → schema → seed/theme/content →
     DNS → staff accounts → go-live) — not yet written.

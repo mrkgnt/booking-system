@@ -1,0 +1,18 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import CustomerDetailScreen from "../../components/CustomerDetailScreen.tsx";
+import { getCustomer } from "../../lib/api/customers.js";
+import { getMe } from "../../lib/api/me.js";
+
+const session = Astro.locals.session!;
+const apiConfig = {
+  baseUrl: import.meta.env.API_BASE_URL,
+  tenantSlug: import.meta.env.TENANT_SLUG,
+  accessToken: session.accessToken,
+};
+const { id } = Astro.params;
+const [{ customer, bookings }, me] = await Promise.all([getCustomer(apiConfig, id!), getMe(apiConfig)]);
+---
+<AdminLayout title={me.customerLabel.singular} customerLabel={me.customerLabel}>
+  <CustomerDetailScreen client:load apiConfig={apiConfig} customer={customer} bookings={bookings} customerLabel={me.customerLabel} />
+</AdminLayout>

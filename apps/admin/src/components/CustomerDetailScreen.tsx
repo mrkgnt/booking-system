@@ -1,26 +1,29 @@
 import { useState } from "react";
 import type { ApiClientConfig } from "../lib/api/client.js";
-import { updatePatient, type Patient } from "../lib/api/patients.js";
+import { updateCustomer, type Customer } from "../lib/api/customers.js";
+import { DEFAULT_CUSTOMER_LABEL, type CustomerLabel } from "../lib/api/me.js";
 import type { Booking } from "../lib/api/bookings.js";
 import { describeApiError } from "../lib/api/errors.js";
 import { formatBookingTime } from "../lib/format.js";
 
-type Props = { apiConfig: ApiClientConfig; patient: Patient; bookings: Booking[] };
+type Props = { apiConfig: ApiClientConfig; customer: Customer; bookings: Booking[]; customerLabel?: CustomerLabel };
 
-export default function PatientDetailScreen({ apiConfig, patient, bookings }: Props) {
-  const [name, setName] = useState(patient.name);
-  const [email, setEmail] = useState(patient.email ?? "");
-  const [phone, setPhone] = useState(patient.phone ?? "");
-  const [notes, setNotes] = useState(patient.notes ?? "");
+export default function CustomerDetailScreen({ apiConfig, customer, bookings, customerLabel = DEFAULT_CUSTOMER_LABEL }: Props) {
+  const [name, setName] = useState(customer.name);
+  const [email, setEmail] = useState(customer.email ?? "");
+  const [phone, setPhone] = useState(customer.phone ?? "");
+  const [notes, setNotes] = useState(customer.notes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const pluralLower = customerLabel.plural.toLowerCase();
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await updatePatient(apiConfig, patient.id, {
+      await updateCustomer(apiConfig, customer.id, {
         name,
         email: email || undefined,
         phone: phone || undefined,
@@ -35,8 +38,8 @@ export default function PatientDetailScreen({ apiConfig, patient, bookings }: Pr
 
   return (
     <div className="space-y-6">
-      <a className="text-sm text-blue-600 hover:underline" href="/patients">Back to patients</a>
-      <h2 className="text-lg font-semibold">{patient.name}</h2>
+      <a className="text-sm text-blue-600 hover:underline" href="/customers">Back to {pluralLower}</a>
+      <h2 className="text-lg font-semibold">{customer.name}</h2>
 
       {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 

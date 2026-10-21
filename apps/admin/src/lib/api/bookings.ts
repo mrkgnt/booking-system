@@ -23,7 +23,7 @@ export async function listBookings(config: ApiClientConfig, filters: ListBooking
 
 export type ForceBookInput = {
   serviceId: string; staffId: string; startsAt: string; locale: "lv" | "ru" | "en";
-  description?: string; patient: { name: string; email?: string; phone?: string };
+  description?: string; customer: { name: string; email?: string; phone?: string };
 };
 
 export async function forceBookBooking(config: ApiClientConfig, input: ForceBookInput): Promise<Booking> {

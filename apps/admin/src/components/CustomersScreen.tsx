@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiClientConfig } from "../lib/api/client.js";
-import { listPatients, type Patient } from "../lib/api/patients.js";
+import { listCustomers, type Customer } from "../lib/api/customers.js";
+import { DEFAULT_CUSTOMER_LABEL, type CustomerLabel } from "../lib/api/me.js";
 import { describeApiError } from "../lib/api/errors.js";
 import { formatBookingTime } from "../lib/format.js";
 
-type Props = { apiConfig: ApiClientConfig; patients: Patient[] };
+type Props = { apiConfig: ApiClientConfig; customers: Customer[]; customerLabel?: CustomerLabel };
 
-export default function PatientsScreen({ apiConfig, patients: initialPatients }: Props) {
+export default function CustomersScreen({ apiConfig, customers: initialCustomers, customerLabel = DEFAULT_CUSTOMER_LABEL }: Props) {
   const [query, setQuery] = useState("");
-  const [patients, setPatients] = useState<Patient[]>(initialPatients);
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const skippedInitialFetch = useRef(false);
@@ -21,9 +22,9 @@ export default function PatientsScreen({ apiConfig, patients: initialPatients }:
     let cancelled = false;
     setLoading(true);
     setError(null);
-    listPatients(apiConfig, query || undefined)
+    listCustomers(apiConfig, query || undefined)
       .then((result) => {
-        if (!cancelled) setPatients(result);
+        if (!cancelled) setCustomers(result);
       })
       .catch((err) => {
         if (!cancelled) setError(describeApiError(err));
@@ -36,11 +37,13 @@ export default function PatientsScreen({ apiConfig, patients: initialPatients }:
     };
   }, [query]);
 
+  const pluralLower = customerLabel.plural.toLowerCase();
+
   return (
     <div className="space-y-4">
       <input
         type="text"
-        placeholder="Search patients"
+        placeholder={`Search ${pluralLower}`}
         className="rounded border border-gray-300 px-2 py-1 text-sm"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -57,16 +60,16 @@ export default function PatientsScreen({ apiConfig, patients: initialPatients }:
             </tr>
           </thead>
           <tbody>
-            {patients.map((p) => (
-              <tr key={p.id} className="border-b border-gray-100">
-                <td className="py-2">{p.name}</td>
-                <td>{p.email ?? "—"}</td>
-                <td>{p.phone ?? "—"}</td>
-                <td>{formatBookingTime(p.created_at)}</td>
-                <td><a className="text-sm text-blue-600 hover:underline" href={`/patients/${p.id}`}>View</a></td>
+            {customers.map((c) => (
+              <tr key={c.id} className="border-b border-gray-100">
+                <td className="py-2">{c.name}</td>
+                <td>{c.email ?? "—"}</td>
+                <td>{c.phone ?? "—"}</td>
+                <td>{formatBookingTime(c.created_at)}</td>
+                <td><a className="text-sm text-blue-600 hover:underline" href={`/customers/${c.id}`}>View</a></td>
               </tr>
             ))}
-            {patients.length === 0 && <tr><td colSpan={5} className="py-4 text-gray-400">No patients found.</td></tr>}
+            {customers.length === 0 && <tr><td colSpan={5} className="py-4 text-gray-400">No {pluralLower} found.</td></tr>}
           </tbody>
         </table>
       )}

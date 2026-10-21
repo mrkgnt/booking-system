@@ -7,7 +7,7 @@ truncate table
   audit_log,
   booking_verification_tokens,
   bookings,
-  patients,
+  customers,
   staff_services,
   business_hours,
   closures,

@@ -16,7 +16,7 @@ export const createBookingSchema = z.object({
   startsAt: z.string().datetime(),
   locale: z.enum(["lv", "ru", "en"]),
   description: z.string().max(2000).optional(),
-  patient: z
+  customer: z
     .object({
       name: z.string().min(1).max(200),
       email: z.string().email().optional(),

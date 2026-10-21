@@ -112,8 +112,6 @@ contract**).
 ## Open items from this concept pass
 
 - Platform product name — not yet chosen (placeholder: "the Platform").
-- `patients` → `customers` schema/code rename + per-Tenant display-label
-  mechanism — decided (ADR-0002), not yet implemented.
 - Onboarding runbook — not yet written.
 - Tenant contract/DPA template — not yet drafted.
 - Exact grace-period length — illustrative ~14 days, not finalized.

@@ -39,7 +39,7 @@ describe("isIdempotencyKeyViolation", () => {
   });
 
   it("does not flag other unique violations", () => {
-    expect(isIdempotencyKeyViolation({ code: "23505", message: "duplicate key value violates unique constraint \"patients_pkey\"" })).toBe(
+    expect(isIdempotencyKeyViolation({ code: "23505", message: "duplicate key value violates unique constraint \"customers_pkey\"" })).toBe(
       false,
     );
   });

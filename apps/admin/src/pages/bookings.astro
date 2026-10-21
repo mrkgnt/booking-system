@@ -2,6 +2,7 @@
 import AdminLayout from "../layouts/AdminLayout.astro";
 import BookingsScreen from "../components/BookingsScreen.tsx";
 import { listServices, listStaff } from "../lib/api/catalog.js";
+import { getMe } from "../lib/api/me.js";
 
 const session = Astro.locals.session!;
 const apiConfig = {
@@ -9,8 +10,8 @@ const apiConfig = {
   tenantSlug: import.meta.env.TENANT_SLUG,
   accessToken: session.accessToken,
 };
-const [services, staff] = await Promise.all([listServices(apiConfig), listStaff(apiConfig)]);
+const [services, staff, me] = await Promise.all([listServices(apiConfig), listStaff(apiConfig), getMe(apiConfig)]);
 ---
-<AdminLayout title="Bookings">
-  <BookingsScreen client:load apiConfig={apiConfig} services={services} staff={staff} />
+<AdminLayout title="Bookings" customerLabel={me.customerLabel}>
+  <BookingsScreen client:load apiConfig={apiConfig} services={services} staff={staff} customerLabel={me.customerLabel} />
 </AdminLayout>

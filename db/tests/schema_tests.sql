@@ -56,21 +56,21 @@ end $$;
 -- ---------------------------------------------------------------------------
 do $$
 declare
-  v_patient uuid;
+  v_customer uuid;
   v_service uuid;
   v_existing_key text;
 begin
-  select id into v_patient from patients limit 1;
+  select id into v_customer from customers limit 1;
   select id into v_service from services limit 1;
   select idempotency_key into v_existing_key from bookings where idempotency_key is not null limit 1;
 
-  if v_patient is null or v_service is null or v_existing_key is null then
+  if v_customer is null or v_service is null or v_existing_key is null then
     insert into test_results (test_name, passed, detail)
       values ('bookings.idempotency_key uniqueness enforced', false, 'skipped: no seed data to test against (run db/seed.sql first)');
   else
     begin
-      insert into bookings (patient_id, service_id, starts_at, ends_at, locale, idempotency_key)
-        values (v_patient, v_service, now(), now() + interval '30 minutes', 'en', v_existing_key);
+      insert into bookings (customer_id, service_id, starts_at, ends_at, locale, idempotency_key)
+        values (v_customer, v_service, now(), now() + interval '30 minutes', 'en', v_existing_key);
       insert into test_results (test_name, passed, detail)
         values ('bookings.idempotency_key uniqueness enforced', false, 'duplicate idempotency_key insert unexpectedly succeeded');
     exception when unique_violation then
@@ -85,19 +85,19 @@ end $$;
 -- ---------------------------------------------------------------------------
 do $$
 declare
-  v_patient uuid;
+  v_customer uuid;
   v_service uuid;
 begin
-  select id into v_patient from patients limit 1;
+  select id into v_customer from customers limit 1;
   select id into v_service from services limit 1;
 
-  if v_patient is null or v_service is null then
+  if v_customer is null or v_service is null then
     insert into test_results (test_name, passed, detail)
       values ('bookings.status check constraint enforced', false, 'skipped: no seed data (run db/seed.sql first)');
   else
     begin
-      insert into bookings (patient_id, service_id, starts_at, ends_at, locale, status)
-        values (v_patient, v_service, now(), now() + interval '30 minutes', 'en', 'not_a_real_status');
+      insert into bookings (customer_id, service_id, starts_at, ends_at, locale, status)
+        values (v_customer, v_service, now(), now() + interval '30 minutes', 'en', 'not_a_real_status');
       insert into test_results (test_name, passed, detail)
         values ('bookings.status check constraint enforced', false, 'invalid status insert unexpectedly succeeded');
     exception when check_violation then
@@ -166,11 +166,11 @@ end $$;
 -- variables aren't part of the rolled-back transaction state.
 
 -- ---------------------------------------------------------------------------
--- 7. patients -> bookings cascade delete
+-- 7. customers -> bookings cascade delete
 -- ---------------------------------------------------------------------------
 do $$
 declare
-  v_patient_id uuid;
+  v_customer_id uuid;
   v_service_id uuid;
   v_booking_id uuid;
   v_before int;
@@ -179,13 +179,13 @@ begin
   select id into v_service_id from services limit 1;
 
   begin
-    insert into patients (name) values ('CASCADE TEST PATIENT') returning id into v_patient_id;
-    insert into bookings (patient_id, service_id, starts_at, ends_at, locale)
-      values (v_patient_id, v_service_id, now(), now() + interval '30 minutes', 'en')
+    insert into customers (name) values ('CASCADE TEST CUSTOMER') returning id into v_customer_id;
+    insert into bookings (customer_id, service_id, starts_at, ends_at, locale)
+      values (v_customer_id, v_service_id, now(), now() + interval '30 minutes', 'en')
       returning id into v_booking_id;
 
     select count(*) into v_before from bookings where id = v_booking_id;
-    delete from patients where id = v_patient_id;
+    delete from customers where id = v_customer_id;
     select count(*) into v_after from bookings where id = v_booking_id;
 
     raise exception using errcode = 'P0001', message = 'rollback_sentinel';
@@ -196,7 +196,7 @@ begin
   end;
 
   insert into test_results (test_name, passed, detail)
-    values ('patients delete cascades to bookings', v_before = 1 and v_after = 0,
+    values ('customers delete cascades to bookings', v_before = 1 and v_after = 0,
       format('before=%s after=%s', v_before, v_after));
 end $$;
 
@@ -206,7 +206,7 @@ end $$;
 do $$
 declare
   v_staff_id uuid;
-  v_patient_id uuid;
+  v_customer_id uuid;
   v_service_id uuid;
   v_blocked boolean := false;
 begin
@@ -214,9 +214,9 @@ begin
 
   begin
     insert into staff (name) values ('CASCADE TEST STAFF') returning id into v_staff_id;
-    insert into patients (name) values ('RESTRICT TEST PATIENT') returning id into v_patient_id;
-    insert into bookings (patient_id, service_id, staff_id, starts_at, ends_at, locale)
-      values (v_patient_id, v_service_id, v_staff_id, now(), now() + interval '30 minutes', 'en');
+    insert into customers (name) values ('RESTRICT TEST CUSTOMER') returning id into v_customer_id;
+    insert into bookings (customer_id, service_id, staff_id, starts_at, ends_at, locale)
+      values (v_customer_id, v_service_id, v_staff_id, now(), now() + interval '30 minutes', 'en');
 
     begin
       delete from staff where id = v_staff_id;
@@ -285,7 +285,7 @@ end $$;
 -- CRUD grants on every table, gated by is_active_member() through RLS.
 -- ---------------------------------------------------------------------------
 
--- 10. anon cannot read patients (PII) — no grant at all on this table
+-- 10. anon cannot read customers (PII) — no grant at all on this table
 do $$
 declare
   v_count int;
@@ -294,7 +294,7 @@ declare
 begin
   begin
     set local role anon;
-    select count(*) into v_count from patients;
+    select count(*) into v_count from customers;
     reset role;
     v_blocked := (v_count = 0);
     v_reason := format('anon saw %s rows', v_count);
@@ -304,7 +304,7 @@ begin
     v_reason := 'blocked at GRANT level (no SELECT privilege for anon)';
   end;
   insert into test_results (test_name, passed, detail)
-    values ('anon blocked from reading patients (PII)', v_blocked, v_reason);
+    values ('anon blocked from reading customers (PII)', v_blocked, v_reason);
 end $$;
 
 -- 11. anon cannot read bookings — no grant at all on this table
@@ -447,9 +447,9 @@ do $$
 declare
   v_service_id uuid;
   v_staff_id uuid;
-  v_patient_a uuid;
-  v_patient_b uuid;
-  v_patient_c uuid;
+  v_customer_a uuid;
+  v_customer_b uuid;
+  v_customer_c uuid;
   v_overlap_blocked boolean := false;
   v_adjacent_allowed boolean := false;
 begin
@@ -457,14 +457,14 @@ begin
   select id into v_staff_id from staff limit 1;
 
   begin
-    insert into patients (name) values ('OVERLAP CONSTRAINT TEST A') returning id into v_patient_a;
-    insert into bookings (patient_id, service_id, staff_id, starts_at, ends_at, locale)
-      values (v_patient_a, v_service_id, v_staff_id, '2027-03-01T10:00:00Z', '2027-03-01T10:30:00Z', 'en');
+    insert into customers (name) values ('OVERLAP CONSTRAINT TEST A') returning id into v_customer_a;
+    insert into bookings (customer_id, service_id, staff_id, starts_at, ends_at, locale)
+      values (v_customer_a, v_service_id, v_staff_id, '2027-03-01T10:00:00Z', '2027-03-01T10:30:00Z', 'en');
 
-    insert into patients (name) values ('OVERLAP CONSTRAINT TEST B') returning id into v_patient_b;
+    insert into customers (name) values ('OVERLAP CONSTRAINT TEST B') returning id into v_customer_b;
     begin
-      insert into bookings (patient_id, service_id, staff_id, starts_at, ends_at, locale)
-        values (v_patient_b, v_service_id, v_staff_id, '2027-03-01T10:15:00Z', '2027-03-01T10:45:00Z', 'en');
+      insert into bookings (customer_id, service_id, staff_id, starts_at, ends_at, locale)
+        values (v_customer_b, v_service_id, v_staff_id, '2027-03-01T10:15:00Z', '2027-03-01T10:45:00Z', 'en');
     exception when exclusion_violation then
       v_overlap_blocked := true;
     end;
@@ -472,10 +472,10 @@ begin
     -- Adjacent (touching, not overlapping) booking for the same staff
     -- should be allowed — tstzrange is half-open [start, end), so back
     -- to back appointments are legitimate, not a conflict.
-    insert into patients (name) values ('OVERLAP CONSTRAINT TEST C') returning id into v_patient_c;
+    insert into customers (name) values ('OVERLAP CONSTRAINT TEST C') returning id into v_customer_c;
     begin
-      insert into bookings (patient_id, service_id, staff_id, starts_at, ends_at, locale)
-        values (v_patient_c, v_service_id, v_staff_id, '2027-03-01T10:30:00Z', '2027-03-01T11:00:00Z', 'en');
+      insert into bookings (customer_id, service_id, staff_id, starts_at, ends_at, locale)
+        values (v_customer_c, v_service_id, v_staff_id, '2027-03-01T10:30:00Z', '2027-03-01T11:00:00Z', 'en');
       v_adjacent_allowed := true;
     exception when exclusion_violation then
       v_adjacent_allowed := false;

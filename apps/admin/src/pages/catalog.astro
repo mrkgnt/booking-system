@@ -2,6 +2,7 @@
 import AdminLayout from "../layouts/AdminLayout.astro";
 import CatalogScreen from "../components/CatalogScreen.tsx";
 import { listServiceCategories } from "../lib/api/service-categories.js";
+import { getMe } from "../lib/api/me.js";
 
 const session = Astro.locals.session!;
 const apiConfig = {
@@ -9,8 +10,8 @@ const apiConfig = {
   tenantSlug: import.meta.env.TENANT_SLUG,
   accessToken: session.accessToken,
 };
-const categories = await listServiceCategories(apiConfig);
+const [categories, me] = await Promise.all([listServiceCategories(apiConfig), getMe(apiConfig)]);
 ---
-<AdminLayout title="Catalog">
+<AdminLayout title="Catalog" customerLabel={me.customerLabel}>
   <CatalogScreen client:load apiConfig={apiConfig} categories={categories} />
 </AdminLayout>

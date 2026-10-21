@@ -103,12 +103,12 @@ export type Database = {
           cancelled_by: string | null
           consent_given_at: string | null
           created_at: string
+          customer_id: string
           description: string | null
           ends_at: string
           id: string
           idempotency_key: string | null
           locale: string
-          patient_id: string
           sent_to_accounting_at: string | null
           service_id: string
           source: string
@@ -123,12 +123,12 @@ export type Database = {
           cancelled_by?: string | null
           consent_given_at?: string | null
           created_at?: string
+          customer_id: string
           description?: string | null
           ends_at: string
           id?: string
           idempotency_key?: string | null
           locale: string
-          patient_id: string
           sent_to_accounting_at?: string | null
           service_id: string
           source?: string
@@ -143,12 +143,12 @@ export type Database = {
           cancelled_by?: string | null
           consent_given_at?: string | null
           created_at?: string
+          customer_id?: string
           description?: string | null
           ends_at?: string
           id?: string
           idempotency_key?: string | null
           locale?: string
-          patient_id?: string
           sent_to_accounting_at?: string | null
           service_id?: string
           source?: string
@@ -167,10 +167,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "bookings_patient_id_fkey"
-            columns: ["patient_id"]
+            foreignKeyName: "bookings_customer_id_fkey"
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: "patients"
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
           {
@@ -351,6 +351,45 @@ export type Database = {
           },
         ]
       }
+      customers: {
+        Row: {
+          consent_given_at: string | null
+          created_at: string
+          email: string | null
+          external_refs: Json
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          preferred_locale: string | null
+          updated_at: string
+        }
+        Insert: {
+          consent_given_at?: string | null
+          created_at?: string
+          email?: string | null
+          external_refs?: Json
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          preferred_locale?: string | null
+          updated_at?: string
+        }
+        Update: {
+          consent_given_at?: string | null
+          created_at?: string
+          email?: string | null
+          external_refs?: Json
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          preferred_locale?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       external_busy_blocks: {
         Row: {
           created_at: string
@@ -435,45 +474,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      patients: {
-        Row: {
-          consent_given_at: string | null
-          created_at: string
-          email: string | null
-          external_refs: Json
-          id: string
-          name: string
-          notes: string | null
-          phone: string | null
-          preferred_locale: string | null
-          updated_at: string
-        }
-        Insert: {
-          consent_given_at?: string | null
-          created_at?: string
-          email?: string | null
-          external_refs?: Json
-          id?: string
-          name: string
-          notes?: string | null
-          phone?: string | null
-          preferred_locale?: string | null
-          updated_at?: string
-        }
-        Update: {
-          consent_given_at?: string | null
-          created_at?: string
-          email?: string | null
-          external_refs?: Json
-          id?: string
-          name?: string
-          notes?: string | null
-          phone?: string | null
-          preferred_locale?: string | null
-          updated_at?: string
-        }
-        Relationships: []
       }
       roles: {
         Row: {
@@ -786,12 +786,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -815,11 +815,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -840,11 +840,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -865,11 +865,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -882,11 +882,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

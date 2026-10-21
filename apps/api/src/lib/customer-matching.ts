@@ -1,25 +1,25 @@
-// Pure patient find-or-create SELECTION logic — the Supabase query that
+// Pure customer find-or-create SELECTION logic — the Supabase query that
 // fetches candidates lives in routes/bookings.ts; this module only decides
 // which (if any) candidate to reuse. Separated so the decision logic is
 // unit-testable without a DB.
 //
 // MVP heuristic, not a real identity system: there's no unique constraint
-// on patients.email or patients.phone (correctly — a household can share a
-// phone), so this is inherently approximate. Matches on exact email OR
+// on customers.email or customers.phone (correctly — a household can share
+// a phone), so this is inherently approximate. Matches on exact email OR
 // exact phone; if multiple candidates match, picks the most-recently-
 // created one rather than erroring — blocking booking creation over an
 // ambiguous match is worse than an imperfect merge. Accepted MVP debt, not
-// a silent gap: a real "merge duplicate patients" admin tool is out of
+// a silent gap: a real "merge duplicate customers" admin tool is out of
 // scope here.
 
-export type PatientCandidate = {
+export type CustomerCandidate = {
   id: string;
   email: string | null;
   phone: string | null;
   createdAt: string; // ISO
 };
 
-export type NewPatientInput = {
+export type NewCustomerInput = {
   email?: string;
   phone?: string;
 };
@@ -32,12 +32,12 @@ function normalizePhone(phone: string): string {
   return phone.replace(/[\s\-().]/g, "");
 }
 
-// Returns the candidate to reuse, or null if a new patient should be
+// Returns the candidate to reuse, or null if a new customer should be
 // created. Does not mutate input.
-export function selectMatchingPatient(
-  candidates: PatientCandidate[],
-  input: NewPatientInput,
-): PatientCandidate | null {
+export function selectMatchingCustomer(
+  candidates: CustomerCandidate[],
+  input: NewCustomerInput,
+): CustomerCandidate | null {
   const email = input.email ? normalizeEmail(input.email) : undefined;
   const phone = input.phone ? normalizePhone(input.phone) : undefined;
 
