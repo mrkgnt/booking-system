@@ -17,7 +17,7 @@ const registry: Record<string, TenantConfig> = {
   dentdi: {
     slug: "dentdi",
     supabaseUrl: env.DENTDI_SUPABASE_URL,
-    supabaseServiceRoleKey: env.DENTDI_SUPABASE_SERVICE_ROLE_KEY,
+    supabaseServiceRoleKey: env.DENTDI_SUPABASE_SECRET_KEY,
     supabaseAnonKey: env.DENTDI_SUPABASE_ANON_KEY,
   },
 };

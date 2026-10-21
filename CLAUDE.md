@@ -3,7 +3,10 @@
 This file is living memory for Claude Code sessions in this repo. Update it
 as decisions are made or build stage changes — don't let it go stale.
 Background/rationale that doesn't change often lives in `PROJECT_CONTEXT.md`;
-this file tracks current state and active decisions.
+the business/product concept (pricing, commercial terms, feature scope,
+operating model) lives in `PRODUCT.md`; canonical domain vocabulary lives in
+`GLOSSARY.md`; architecturally-shaped decisions get an ADR in `docs/adr/`.
+This file tracks current state and active decisions.
 
 ## Role & Product
 
@@ -12,7 +15,9 @@ small service businesses (dental/medical practices, groomers, hairdressers,
 salons) — a marketing website + booking system configured per business
 through data, not forked code. Favor pragmatic, maintainable decisions over
 theoretically "perfect" ones. First client: **Dent Di** (dentdi.lv), a
-Latvian dental clinic with 2 staff (1 dentist, 1 nurse).
+Latvian dental clinic with 2 staff (1 dentist, 1 nurse). Sold and onboarded
+agency-managed, not self-serve — see `PRODUCT.md` for the full product/
+business concept (ADR-0001).
 
 ## ⚠️ CRITICAL ARCHITECTURE NOTE — READ FIRST
 
@@ -310,9 +315,22 @@ detail: see `PROJECT_CONTEXT.md`.
 | Rate limiting / bot protection (interim) | In-memory rate limiter + env-gated Turnstile stub (disabled by default, fails closed if enabled without a secret key) — real requirements from PROJECT_CONTEXT.md, built structurally correct now rather than skipped, but explicitly insufficient once actually deployed (no shared memory across serverless instances; no Cloudflare site key exists yet). |
 | Cancel/reschedule token model | Capability tokens, not single-use — valid until `booking.starts_at` passes or `status` becomes finalized, not gated by `used_at`. Simpler than reissuing tokens per action and correctly allows repeat reschedules. Issued at confirm time (not creation), refreshed (not reissued) on reschedule. No Turnstile on these endpoints (acting requires an unguessable 32-byte token already, so bot enumeration isn't the threat model) but `rateLimitMiddleware` still applies as cheap defense-in-depth. No `audit_log` write for patient-initiated cancel/reschedule — that table is scoped to staff manual overrides. |
 | Admin/staff data-access pattern | Admin routes use a per-request Supabase client scoped to the staff member's own JWT (anon key + Authorization forwarding), relying on existing RLS (`is_active_member()`) as the real authorization boundary — not the service-role key. `staffAuthMiddleware`'s one service-role read (`business_members` status) exists only to turn "RLS returns zero rows" into a clean 401/403. |
-| Back-office UI stack | Astro (`output: "server"`) + React islands (`client:load`) + Tailwind v4 via `@tailwindcss/vite`, `apps/admin`. SSR auth via `@supabase/ssr` — Astro middleware checks the session on every request and redirects to `/login`, rather than a client-side-only check. Distinct neutral admin visual theme (Tailwind defaults), not the public-site's sage/cream/Georgia-serif brand — reserved for the future public marketing site. |
-| Admin UI resource coverage | Every `/admin/*` resource with a working API route now has a corresponding UI screen: Patients (list/search/detail/edit), Catalog (service categories/services/staff CRUD + staff↔service linking), Scheduling (business hours/closures) — built via a strict TDD split (Playwright spec written and confirmed red first, then a fresh agent with no visibility into the spec built the UI against a written accessibility contract, then the spec confirmed green). 8 E2E spec files total, all against the live Dent Di project. |
+| Back-office UI stack | Astro (`output: "server"`) + React islands (`client:load`) + Tailwind v4 via `@tailwindcss/vite`, `apps/admin`. SSR auth via `@supabase/ssr` — Astro middleware checks the session on every request and redirects to `/login`, rather than a client-side-only check. Distinct neutral admin visual theme, not the public-site's sage/cream/Georgia-serif brand — reserved for the future public marketing site. |
+| Admin UI resource coverage | Every `/admin/*` resource with a working API route now has a corresponding UI screen: Patients (list/search/detail/edit), Catalog (service categories/services/staff CRUD + staff↔service linking), Scheduling (business hours/closures), Dashboard (weekly availability calendar + confirmed/pending/cancelled stats, the new post-login landing page) — built via a strict TDD split (Playwright spec written and confirmed red first, then a fresh agent with no visibility into the spec built the UI against a written accessibility contract, then the spec confirmed green). 9 E2E spec files total, all against the live Dent Di project. |
+| UI component library | **shadcn/ui, for every new UI element in any Astro app in this repo, going forward** (`apps/admin` now, `apps/site` when it exists) — not just the Dashboard's original scope (`Button`/`Card`/`Popover`/`Calendar`). New buttons, dialogs, dropdowns, form controls, etc. should be added via the shadcn CLI (`pnpm dlx shadcn@latest add <component>`) rather than hand-rolled Tailwind markup, matching the existing `components.json`/`@/components`/`@/lib/utils` setup already wired into `apps/admin`. This does not mean retrofitting every existing hand-rolled element (native `<select>`s, plain `<button>`s across Bookings/Patients/Catalog/Scheduling) on sight — those stay as-is unless a screen is being touched for another reason anyway; the directive is forward-looking; the CLI init step itself (Task 1 of the Dashboard plan) already changed the app-wide theme/fonts for all existing screens as a side effect, which was flagged but not undone. |
 | Admin E2E suite — browser-verified | All 8 specs (10 tests) run repeatably green against real dev servers + the live Dent Di project, on a machine with normal network access — the earlier "sandbox has no network egress" caveat was specific to one prior execution environment, not a lasting constraint, and has been removed from this file. Getting a clean run surfaced and fixed 3 real backend bugs (CORS missing `PUT`; a false-404-on-translation-only-PATCH bug in `admin-service-categories.ts`/`admin-services.ts`/`admin-staff.ts`) and 5 Playwright-only bugs (stale row locators post-edit-render, `Date.now() % 27` date-label collisions with leftover rows, a strict-mode collision with the astro dev toolbar's hidden props dump, a weak save-button settle signal) — none were real UI defects. |
+| Operating model (productization) | **Agency-managed, not self-serve** (ADR-0001) — every Tenant is sold and onboarded by hand, indefinitely; no signup/trial flow or automated tenant provisioning is planned. Full concept in `PRODUCT.md`. |
+| Target customer (ICP) | Confirmed broad, not narrowed: staff-based appointment businesses generally (dental/medical, grooming, salons, hairdressers), not medical-only. |
+| Domain terminology | **Tenant** is the canonical term for a subscribing business (schema keeps `business_profile`/"Business" as the same concept, unrenamed). **Customer** is the canonical term for the Tenant's own end customer, replacing dental-specific "Patient" as domain language, with a per-Tenant-configurable *display label* so staff still see vertical-appropriate wording (ADR-0002; schema rename **pending implementation**). Platform's own product name not yet chosen. See `GLOSSARY.md`. |
+| CRM/CMS feature scope (productization) | CRM stays lightweight for v1 (profile + booking history + staff notes; no pipelines/campaigns/segmentation). CMS stays developer-configured at onboarding (no client-facing content/theme editor). Both can expand later on real demand, but new features must stay config-driven/generic in shape even when a specific Tenant (Dent Di) drives the request first — not dentistry-hardcoded. |
+| Platform branding | Public booking widget/site carries a light "powered by [Platform]" credit; staff-facing admin backend stays neutral/unbranded. |
+| Pricing & billing | One-time Setup fee + recurring Monthly fee (hosting/infra + maintenance + minor config tweaks bundled; net-new features billed separately), both invoiced through Stripe operationally (dashboard-driven) — no Stripe webhook integration built into `apps/api`. No tiered packages yet. |
+| Admin/site deployment model | `apps/admin` stays one deployment per Tenant (today's build-time `TENANT_SLUG` model, unchanged); the future `apps/site` follows the same per-Tenant-deployment pattern, each on the Tenant's own custom domain. `apps/api` remains the one shared, dynamically-tenant-resolved deployment. See ADR-0003. |
+| Support & SLA | One dedicated support email, best-effort response — no formal uptime SLA or penalty clause at this stage. |
+| Data retention (productization) | Customer/booking records retained indefinitely while a Tenant is active; purged within ~90 days of contract end (after the offboarding grace period's data-export offer). Cancelled bookings aren't separately time-purged. Becomes the default clause in the Tenant contract/DPA. |
+| Tenant contract / DPA | A standard, reusable contract/DPA template, signed identically by every Tenant — not improvised per client. States the termination/grace-period and data-retention terms above; Tenant is Data Controller, Platform is Data Processor. |
+| Internal tenant tracking | Stays a spreadsheet (Tenant name, Supabase project ref, contract/billing status) rather than an in-app back-office tool, until tenant count makes manual tracking unwieldy. |
+| Geographic scope (productization) | Implicitly Latvia/Baltics-focused (EUR, Latvian-aware contract language) for now; expand opportunistically rather than building region-agnostic billing/legal infrastructure speculatively. |
 
 ## Open / Non-Blocking Items
 
@@ -370,6 +388,19 @@ detail: see `PROJECT_CONTEXT.md`.
   `business_hours`/`closures` mutations write none. Flag this if audit
   coverage of catalog/scheduling edits is ever required; it's a
   backend change, out of scope for UI work.
+- **Productization follow-ups from the `PRODUCT.md` concept pass**
+  (2026-10-21), none blocking Dent Di's current build:
+  - `patients` → `customers` schema/code rename + per-Tenant
+    display-label mechanism (ADR-0002) — decided, not yet implemented.
+    Touches the schema, generated types, `admin-patients.ts` and
+    similar routes, the admin UI's Patients screen, and
+    `patients.spec.ts`.
+  - Platform product name — not yet chosen.
+  - Onboarding runbook (Supabase project → schema → seed/theme/content →
+    DNS → staff accounts → go-live) — not yet written.
+  - Tenant contract/DPA template — not yet drafted.
+  - Exact grace-period length for the offboarding term — illustrative
+    ~14 days in `PRODUCT.md`, not finalized.
 
 ## Working Agreement
 
@@ -382,3 +413,13 @@ detail: see `PROJECT_CONTEXT.md`.
   expensive to retrofit onto live booking data. Keep genuinely deferrable
   things (calendar sync, invoicing-as-a-feature) minimal or schema-only,
   but leave hooks so they're additive later.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub Issues (`mrkgnt/booking-system`), via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context layout (`GLOSSARY.md` + `docs/adr/` at the repo root, created lazily as terms/decisions are resolved). See `docs/agents/domain.md`.

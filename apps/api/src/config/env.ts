@@ -13,7 +13,7 @@ const envSchema = z.object({
   // (TENANTSLUG_SUPABASE_*) is fine for a handful of clients; revisit once
   // a DB-backed tenant registry replaces this env-var map (see CLAUDE.md).
   DENTDI_SUPABASE_URL: z.string().url(),
-  DENTDI_SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  DENTDI_SUPABASE_SECRET_KEY: z.string().min(1),
   DENTDI_SUPABASE_ANON_KEY: z.string().min(1),
 
   // Bot protection (Cloudflare Turnstile) — disabled by default since no
