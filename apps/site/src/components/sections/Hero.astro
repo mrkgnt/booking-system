@@ -1,0 +1,85 @@
+---
+// Hero section (issue #22, ADR-0005) — headline/subhead/stats row/two
+// CTAs from live Site Content. Self-contained: fetches its own
+// site_sections/site_content directly via Supabase REST (apps/site's
+// per-Tenant credentials), independent of sibling sections so concurrent
+// tickets (#23 team/gallery, #25 value-props/contact/find-us/footer)
+// touching the same home page don't need to share this component's state.
+import { Button } from "@/components/ui/button";
+import Testimonial from "@/components/sections/Testimonial.astro";
+import { getSectionContent, type SectionValues } from "@/lib/site-content";
+import type { Locale } from "@/content/types";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const canonicalLocale = (import.meta.env.SITE_CONTENT_CANONICAL_LOCALE || "lv") as Locale;
+
+const values: SectionValues = await getSectionContent(
+  { supabaseUrl: import.meta.env.SUPABASE_URL, anonKey: import.meta.env.SUPABASE_ANON_KEY },
+  "home",
+  "hero",
+  locale,
+  canonicalLocale,
+);
+
+// Judgment call (flagging per the "flag open decisions" working
+// agreement): the hero Section's schema (site_sections, seeded by #28)
+// declares exactly one CTA field, `cta_label`. The reference design shows
+// two visually distinct buttons, but this ticket's acceptance criteria
+// are explicit that *both* CTAs open the same Booking Widget drawer
+// (ADR-0004) rather than one of them linking elsewhere (e.g. scrolling to
+// a price list) — so a second, independently-worded CTA field would only
+// ever duplicate that one action under different copy. Rendered here as
+// a primary (Site-Content-driven) button plus a secondary button using a
+// small, fixed, non-CMS label — both wired to data-platform-book. If a
+// Tenant ever wants genuinely distinct secondary-CTA copy, the fix is a
+// second field on this Section's schema (a developer change, by design —
+// see GLOSSARY.md's Section entry), not something this component should
+// improvise.
+const secondaryCtaLabel: Record<Locale, string> = {
+  lv: "Pieteikties tiešsaistē",
+  ru: "Записаться онлайн",
+  en: "Book online",
+};
+
+const heroPhotoUrl = "https://dentdi.lv/wp-content/uploads/2023/10/Dent_Di__71-min-1-2048x1365-1.jpg";
+---
+
+<section class="relative overflow-hidden">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-24 grid gap-14 lg:grid-cols-[1.05fr_0.95fr] items-center">
+    <div>
+      {values.headline && (
+        <h1 class="text-4xl sm:text-5xl font-semibold leading-tight text-foreground">{values.headline}</h1>
+      )}
+      {values.subhead && <p class="mt-5 text-lg text-muted-foreground max-w-xl">{values.subhead}</p>}
+      {(values.stats_years || values.stats_languages) && (
+        <div class="mt-6 flex flex-wrap gap-3 text-sm">
+          {values.stats_years && (
+            <span class="rounded-full bg-mint px-4 py-1.5 font-medium text-ink">{values.stats_years}</span>
+          )}
+          {values.stats_languages && (
+            <span class="rounded-full bg-mint px-4 py-1.5 font-medium text-ink">{values.stats_languages}</span>
+          )}
+        </div>
+      )}
+      <div class="mt-8 flex flex-wrap items-center gap-4">
+        {values.cta_label && (
+          <Button data-platform-book size="lg" className="h-11 px-6 text-base rounded-full hover:bg-teal-dark">
+            {values.cta_label}
+          </Button>
+        )}
+        <Button data-platform-book variant="outline" size="lg" className="h-11 px-6 text-base rounded-full">
+          {secondaryCtaLabel[locale]}
+        </Button>
+      </div>
+    </div>
+
+    <div class="relative pb-6 sm:pb-0">
+      <img src={heroPhotoUrl} alt="" class="aspect-[4/3] w-full rounded-3xl object-cover" loading="eager" />
+      <Testimonial locale={locale} />
+    </div>
+  </div>
+</section>
