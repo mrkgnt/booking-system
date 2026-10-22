@@ -1,5 +1,7 @@
 ---
 import { Button } from "@/components/ui/button";
+import Team from "@/components/Team.astro";
+import Gallery from "@/components/Gallery.astro";
 import type { SiteCopy } from "@/content/types";
 
 interface Props {
@@ -62,17 +64,13 @@ const photoStrip = [
   </div>
 </section>
 
-<section class="mx-auto max-w-5xl px-4 sm:px-6 py-16">
-  <div class="grid gap-6 sm:grid-cols-2">
-    {copy.team.map((member) => (
-      <div class="rounded-2xl border border-border/70 bg-card p-6">
-        <p class="text-xl font-semibold text-foreground">{member.name}</p>
-        <p class="text-primary font-medium mt-0.5">{member.role}</p>
-        <p class="text-sm text-muted-foreground mt-2">{member.credential}</p>
-      </div>
-    ))}
-  </div>
-</section>
+{/* Team + Gallery (ticket #23) — reads apps/site/src/lib/team.ts +
+    apps/site/src/lib/site-content.ts directly (staff table / gallery
+    Site Content field), not `copy`. Self-contained components; this is
+    the only block in this file ticket #23 touches — see Team.astro /
+    Gallery.astro for the actual render logic. */}
+<Team />
+<Gallery />
 
 <section class="mx-auto max-w-5xl px-4 sm:px-6 py-16 grid gap-10 sm:grid-cols-2">
   <div>
