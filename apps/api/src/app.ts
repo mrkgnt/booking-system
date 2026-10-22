@@ -30,20 +30,25 @@ app.use(
   }),
 );
 
-// Wide-open CORS for public, unauthenticated widget-facing routes under
-// /public/* — the embedding origin is an arbitrary third-party Tenant
-// website, unknown in advance (see ADR-0004 / CLAUDE.md's "Booking Widget
-// embedding mechanism" decision). Does NOT cover /availability or
-// /bookings/* (the mutating booking-creation contract) — that's issue
-// #14's scope, not this route's.
-app.use(
-  "/public/*",
-  cors({
+// Shared helper for the wide-open (`origin: "*"`) CORS shape every public,
+// unauthenticated widget-facing route below needs — the embedding/calling
+// origin is an arbitrary third-party Tenant website or the shared
+// apps/widget deployment, unknown in advance (see ADR-0004 / CLAUDE.md's
+// "Booking Widget embedding mechanism" decision). `X-Tenant-Slug` is
+// common to every one of these routes; callers add `Content-Type` only for
+// the POST routes that send a JSON body.
+function publicCors(methods: string[], extraHeaders: string[] = []) {
+  return cors({
     origin: "*",
-    allowHeaders: ["X-Tenant-Slug"],
-    allowMethods: ["GET", "OPTIONS"],
-  }),
-);
+    allowHeaders: ["X-Tenant-Slug", ...extraHeaders],
+    allowMethods: [...methods, "OPTIONS"],
+  });
+}
+
+// Public, unauthenticated widget-facing routes under /public/*. Does NOT
+// cover /availability or /bookings/* (the mutating booking-creation
+// contract) — that's issue #14's scope, not this route's.
+app.use("/public/*", publicCors(["GET"]));
 
 // Issue #14: the Drawer's actual booking flow calls these three routes
 // directly (not under /public/*) from the widget's iframe, whose origin is
@@ -57,51 +62,16 @@ app.use(
 // built those pages. /bookings and /bookings/confirm are POST with a
 // JSON body, so they need Content-Type in allowHeaders in addition to
 // X-Tenant-Slug.
-app.use(
-  "/availability",
-  cors({
-    origin: "*",
-    allowHeaders: ["X-Tenant-Slug"],
-    allowMethods: ["GET", "OPTIONS"],
-  }),
-);
-app.use(
-  "/bookings",
-  cors({
-    origin: "*",
-    allowHeaders: ["Content-Type", "X-Tenant-Slug"],
-    allowMethods: ["POST", "OPTIONS"],
-  }),
-);
-app.use(
-  "/bookings/confirm",
-  cors({
-    origin: "*",
-    allowHeaders: ["Content-Type", "X-Tenant-Slug"],
-    allowMethods: ["POST", "OPTIONS"],
-  }),
-);
+app.use("/availability", publicCors(["GET"]));
+app.use("/bookings", publicCors(["POST"], ["Content-Type"]));
+app.use("/bookings/confirm", publicCors(["POST"], ["Content-Type"]));
 
 // Issues #16/#17: the standalone (non-iframe) reschedule/cancel pages call
 // these two directly from their own top-level page, same arbitrary-in-
 // advance widget origin as above — deliberately excluded from #14's CORS
 // scope above since #14 didn't build these pages.
-app.use(
-  "/bookings/reschedule",
-  cors({
-    origin: "*",
-    allowHeaders: ["Content-Type", "X-Tenant-Slug"],
-    allowMethods: ["POST", "OPTIONS"],
-  }),
-);
-app.use(
-  "/bookings/cancel",
-  cors({
-    origin: "*",
-    allowHeaders: ["Content-Type", "X-Tenant-Slug"],
-    allowMethods: ["POST", "OPTIONS"],
-  }),
-);
+app.use("/bookings/reschedule", publicCors(["POST"], ["Content-Type"]));
+app.use("/bookings/cancel", publicCors(["POST"], ["Content-Type"]));
 
 app.route("/", healthRoute);
 app.route("/", smokeRoute);
