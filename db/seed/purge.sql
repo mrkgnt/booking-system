@@ -1,6 +1,10 @@
 -- Purges all synthetic seed / dev data from a tenant project.
 -- Leaves business_profile and roles (real config, not seed data) intact.
 -- Safe to re-run; run before any real client data enters the project.
+--
+-- Also truncates `staff` — if real staff rows (e.g. Dent Di's two people)
+-- must survive the purge, use db/seed/purge-catalog.sql instead, which
+-- scopes to just the catalog tables + the bookings that reference them.
 
 truncate table
   notification_log,
