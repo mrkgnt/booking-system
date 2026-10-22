@@ -12,12 +12,16 @@ This file tracks current state and active decisions.
 
 Solo developer's technical co-builder on a multi-tenant SaaS platform for
 small service businesses (dental/medical practices, groomers, hairdressers,
-salons) — a marketing website + booking system configured per business
-through data, not forked code. Favor pragmatic, maintainable decisions over
-theoretically "perfect" ones. First client: **Dent Di** (dentdi.lv), a
-Latvian dental clinic with 2 staff (1 dentist, 1 nurse). Sold and onboarded
-agency-managed, not self-serve — see `PRODUCT.md` for the full product/
-business concept (ADR-0001).
+salons) — a booking system delivered to every Tenant as an embeddable
+**Booking Widget** that plugs into any existing website, configured per
+business through data, not forked code; a full custom site (**Site
+build**) is an optional, separately-priced add-on, not the default
+(ADR-0004). Favor pragmatic, maintainable decisions over theoretically
+"perfect" ones. First client: **Dent Di** (dentdi.lv), a Latvian dental
+clinic with 2 staff (1 dentist, 1 nurse), getting both the Booking Widget
+and a Site build (their WordPress site is being decommissioned). Sold and
+onboarded agency-managed, not self-serve — see `PRODUCT.md` for the full
+product/business concept (ADR-0001).
 
 ## ⚠️ CRITICAL ARCHITECTURE NOTE — READ FIRST
 
@@ -325,6 +329,39 @@ detail: see `PROJECT_CONTEXT.md`.
       already-documented transient `staffAuthMiddleware` flakiness under
       concurrent workers) — pre-existing flakiness patterns, not caused
       by this rename, not yet re-investigated.
+- [ ] **`apps/widget` scoped via `/grill-with-docs`, ADR-0004**
+      (2026-10-21). A grilling + domain-modeling session on "what's
+      next for `apps/site`" surfaced that the base product every Tenant
+      actually needs isn't a full site — it's an embeddable **Booking
+      Widget**, installable on any existing website via one `<script>`
+      tag. `apps/site` (full custom site) is now an optional,
+      separately-priced add-on, not the default. Architecture: iframe
+      embed (not a Web Component, for CSS/JS isolation from an unknown
+      host stack); one **shared** `apps/widget` deployment across every
+      Tenant (tenant resolved via `data-tenant`, mirroring `apps/api`'s
+      pattern, not `apps/admin`/`apps/site`'s per-tenant model); live
+      per-request content fetch (theme/catalog/translations), no
+      interval polling; wide-open CORS on the public booking endpoints
+      + `Content-Security-Policy: frame-ancestors *`, both required for
+      an unknown embedding origin and judged low-risk given these
+      endpoints are already unauthenticated; standalone (non-iframe)
+      cancel/reschedule pages served by `apps/widget` itself
+      (`widget.platform.com/{tenant}/...`), same mechanism for every
+      Tenant tier since a widget-only Tenant has no site of its own;
+      default floating "Book Now" trigger with an opt-out flag plus a
+      `data-platform-book` hook for a Tenant's own CTA; `data-locale`
+      attribute with a conditional switcher; `apps/site` dogfoods the
+      same public embed rather than sharing booking-flow code (keeps
+      the "no shared `packages/`" call from Decisions Log intact).
+      Same stack as `apps/admin` (Astro SSR + React islands),
+      self-contained, not yet scaffolded — this is the next build-stage
+      item, ahead of `apps/site` itself. Full detail: ADR-0004,
+      `PRODUCT.md`, `GLOSSARY.md`.
+      **Update (2026-10-21):** broken into 11 tracer-bullet tickets via
+      `/to-tickets`, published as sub-issues of
+      [#6](https://github.com/mrkgnt/booking-system/issues/6) with the
+      `ready-for-agent` label, in dependency order — see that issue for
+      the full breakdown.
 
 ## Decisions Log (running — append, don't rewrite history)
 
@@ -373,9 +410,46 @@ detail: see `PROJECT_CONTEXT.md`.
 | Geographic scope (productization) | Implicitly Latvia/Baltics-focused (EUR, Latvian-aware contract language) for now; expand opportunistically rather than building region-agnostic billing/legal infrastructure speculatively. |
 | E2E credential loading | `apps/admin/playwright.config.ts` calls Node's built-in `process.loadEnvFile()` (Node 20.12+/22+, no new dependency) before `defineConfig`, so `E2E_OWNER_EMAIL`/`E2E_OWNER_PASSWORD` load from `apps/admin/.env` automatically — `pnpm test:e2e` alone now works, no more prefixing the command with inline env vars every run. Falls back to real environment variables (e.g. CI secrets) if `.env` doesn't exist. |
 | E2E flakiness diagnosed & fixed (2026-10-21) | Three distinct causes, all test-only (no app code changed), found via `/diagnosing-bugs`' tight-loop discipline (isolated single-spec reruns first, then repeated full-suite reruns to get a reproduction rate) rather than theorizing from the component code first: (1) `customers.spec.ts`'s save-then-`page.reload()` step had no wait for the PATCH to actually land — `page.reload()` does a one-shot SSR read with no polling safety net, so a late-landing save showed a stale value for the full timeout; fixed with `page.waitForResponse(...)`, the pattern `scheduling-hours.spec.ts` already used. (2) its "search filters" test asserted an *exact* total row count against live data other specs concurrently mutate via force-book's customer find-or-create — loosened to `toBeGreaterThanOrEqual`. (3) `catalog-services.spec.ts`/`catalog-categories.spec.ts` delete-then-assert races were genuine load contention, not a logic bug — confirmed by `catalog-services.spec.ts` running 6/6 clean in isolation but intermittently failing only under full 6-worker parallel load, with the *same* symptom later landing on `catalog-categories.spec.ts` instead in a different run (one shared local dev server under contention, not a defect in either panel); fixed by raising Playwright's default assertion timeout from 5s to 10s (`expect: { timeout: 10_000 }`). Verified: 4 consecutive full-suite reruns, 15/15 passing each time. |
+| Booking Widget as the base product | The platform's default deliverable to every Tenant is the **Booking Widget** — an iframe-embeddable, script-tag-installable booking drawer that works on any existing website regardless of stack — not a full site. `apps/site` (the full custom site) becomes an optional, separately-priced add-on ("Site build"). See ADR-0004, `PRODUCT.md`, `GLOSSARY.md`. |
+| Booking Widget deployment model | `apps/widget` is one shared deployment across every Tenant (tenant resolved at runtime via a `data-tenant` attribute in the embed snippet), unlike `apps/admin`/`apps/site`'s per-tenant model (ADR-0003) — mirrors `apps/api`'s existing shared/dynamically-resolved pattern instead. See ADR-0004. |
+| Booking Widget embedding mechanism | Iframe, not a Web Component/direct DOM injection — full CSS/JS isolation from a host site whose stack we don't control. `apps/widget` sets a permissive `Content-Security-Policy: frame-ancestors *` and the public booking endpoints (`/availability`, `/bookings`, etc.) get wide-open CORS (`Access-Control-Allow-Origin: *`) — both required for the embed to function on an unknown origin, both judged low-risk since these surfaces are already unauthenticated and protected only by rate-limiting/Turnstile. See ADR-0004. |
+| Booking Widget transactional pages | Cancel/reschedule links in confirmation emails point at standalone (non-iframe) pages served directly by `apps/widget` (`widget.platform.com/{tenant}/...`), used the same way for every Tenant tier — even full-site Tenants — rather than a Tenant's own site hosting them. Custom-domain mapping for these pages (e.g. a Tenant's own `book.dentdi.lv`) deferred until a Tenant actually asks for it. See ADR-0004. |
+| Setup fee / pricing split | Setup fee now covers Booking Widget integration as the baseline every Tenant gets; a Site build is priced separately, scoped by page count/complexity, not bundled. See `GLOSSARY.md`, `PRODUCT.md`. |
+| Build sequencing (widget vs. site) | `apps/widget` is the next thing to scaffold — it's the universal prerequisite every Tenant needs (including Dent Di); `apps/site` (optional) comes after and dogfoods the same public embed script rather than sharing booking-flow code with it. See ADR-0004. |
+| Booking Widget operational posture | `apps/widget` holds no Supabase credentials of its own (talks only to `apps/api`'s public endpoints); `embed.js` ships from one always-latest URL, no per-tenant version pinning — both keep the shared-deployment model (ADR-0004) simple at current tenant scale; revisit if a bad shared deploy's blast radius becomes unacceptable. |
+| Booking Widget UX details (round 2 grilling) | Lazy iframe mount (spinner on first open; the floating trigger itself always renders, since it needs no tenant data); full-screen drawer on mobile, side-panel on desktop; one generic "temporarily unavailable" message (no tenant-specific fallback) on tenant/API failure, logged via `console.error` for diagnosis; "powered by" credit stays plain text until the Platform has a name/site; deep-linking to a pre-selected service is out of scope v1; a programmatic `window.Platform.open()`/`.close()` API is exposed alongside `data-platform-book`. See ADR-0004. |
+| Booking draft (resume-on-reload) | `apps/widget` persists an in-progress booking's full form state client-side via `sessionStorage` (scoped to the widget's own origin), resuming exactly where a customer left off after an accidental host-page reload — re-validated against live availability on resume, cleared on success/restart/session end. Reverses an initial "out of scope" call once the support-burden tradeoff was raised. See ADR-0004, `GLOSSARY.md`. |
+| Host-site CSP (onboarding gap) | `apps/widget`'s `frame-ancestors: *` only controls the inbound side — a Tenant's own host-page CSP can independently block the widget's domain from ever loading, with no fix possible from the widget's side. Tracked as a required onboarding-runbook checklist item once that runbook is written, not an engineering task. See ADR-0004. |
+| apps/widget data-access gap resolved (`/to-tickets`, 2026-10-21) | The existing "Public catalog reads" decision (direct Supabase REST + anon key) assumed a build-time-known Supabase project per deployment, which the *shared* `apps/widget` deployment doesn't have — surfaced as a contradiction with ADR-0004's "zero credentials" line while breaking the widget spec into tickets. Resolved in favor of ADR-0004: `apps/api` gains two new public, wide-open-CORS endpoints for the widget only — tenant-info+catalog, and booking-lookup-by-token (so the cancel/reschedule drawer can show a booking before acting on it). `apps/admin`/`apps/site`'s existing direct-REST pattern is untouched. See ADR-0004. |
+| Booking Widget drawer reused for cancel/reschedule (`/to-tickets`, 2026-10-21) | Cancel and reschedule no longer get a separately-designed page — both render the same **Drawer** component (slide-in panel from the right, ~35vw desktop, dimmed backdrop, full-screen on mobile) the booking flow uses, reached via direct top-level navigation (no host page to embed an iframe into) rather than inside an iframe. Reschedule reuses the drawer's live availability-picker pre-filled with the existing booking; cancel reuses just the shared shell plus a booking-detail view. Amends ADR-0004's original "standalone (non-iframe) pages" phrasing. See ADR-0004, `GLOSSARY.md`'s **Drawer** term. |
+| `apps/widget` implementation complete, code-reviewed (2026-10-22) | All 11 tickets under issue #6 (apps/api endpoints, embed script, drawer shell, trigger hooks, failure UX, mobile layout, locale switcher, full booking flow, booking draft, reschedule, cancel) built, merged to the `widget-integration` branch, and closed. Two-axis code review (`/code-review`) run over the full branch before merge to `main`: **Spec axis** — high fidelity, no real findings (the one gap, #14's E2E happy path still self-skipping against the live inactive `dentdi` tenant, was already disclosed, not a defect). **Standards axis** — two real findings, handled as follows: (1) the entire booking-flow UI (service/availability/contact/confirm steps, cancel/reschedule pages) is hardcoded English, never routed through `apps/widget/src/lib/i18n/messages.ts` — **deferred, not fixed**, logged as its own Open Item below rather than scope-creeping a full i18n pass into a review-fixes commit; (2) `StandaloneDrawerLayout.astro` hand-rolled hex/rgba CSS instead of Tailwind design tokens — fixed directly. Judgement-call duplication smells (repeated fetch-wrapper shape across `apps/widget/src/lib/api/*.ts`, `resolveLocale`/`resolveLocaleString` reimplemented in two `apps/api` route files, 5 near-identical CORS blocks in `app.ts`) — the CORS block repetition was collapsed into a shared helper; the API-client and locale-resolution duplication were left as accepted debt (low payoff relative to the regression risk of refactoring already-tested code this late) and are also logged below. |
 
 ## Open / Non-Blocking Items
 
+- **`apps/widget` booking-flow UI is hardcoded English, not localized**
+  (found via code review, 2026-10-22) — `ServiceStep`/`AvailabilityStep`/
+  `ContactStep`/`ConfirmPendingStep`/`ConfirmedStep`/`CancelContent`/
+  `RescheduleContent`'s copy never routes through
+  `apps/widget/src/lib/i18n/messages.ts` (which today only covers the
+  "unavailable"/"language"/"resuming_draft" keys from issues #11/#13/
+  #15). The in-drawer locale switcher (#13) changes which locale the
+  *catalog data* renders in but not this static chrome. Real gap given
+  launch locales are LV+RU+EN and the Drawer is customer-facing — needs
+  its own scoped pass (extend `messages.ts` with every booking-flow
+  string) rather than being folded into unrelated work.
+- `apps/widget`'s `src/lib/api/*.ts` fetch wrappers (tenant-info,
+  booking-lookup, booking.ts's 5 functions) repeat the same shape
+  (strip trailing slash, build headers, `.json().catch(() => null)`,
+  `!res.ok` branch, try/catch + `console.error`) — `apps/admin` has a
+  precedent (`lib/api/client.ts`'s `apiFetch`) that wasn't reused or
+  mirrored with a local equivalent. Accepted debt (found via code
+  review, 2026-10-22) — revisit if a bug surfaces from the duplication
+  drifting, or before adding more such functions.
+- `resolveLocale` (`apps/api/src/routes/tenant-info.ts`) and
+  `resolveLocaleString` (`apps/api/src/routes/booking-lookup.ts`)
+  independently implement the same locale-fallback logic. Accepted
+  debt (found via code review, 2026-10-22) — a shared `apps/api/src/
+  lib/` helper would be the fix, low priority at 2 call sites.
 - Content accuracy of demo pricing/staff/hours — needs client review.
 - Real photography sourcing (current images hotlinked from WordPress).
 - SEO redirect map from old WordPress URLs.
