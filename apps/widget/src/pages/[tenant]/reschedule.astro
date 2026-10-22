@@ -1,7 +1,7 @@
 ---
 import StandaloneDrawerLayout from "../../layouts/StandaloneDrawerLayout.astro";
 import RescheduleContent from "../../components/RescheduleContent.tsx";
-import { fetchBookingLookup, isReschedulable } from "../../lib/api/booking-lookup.js";
+import { fetchBookingLookup, isActionable } from "../../lib/api/booking-lookup.js";
 
 // Issue #16 — reschedule link target: widget.platform.com/{tenant}/reschedule?token=...
 // Path segment for the tenant slug (not a query param like drawer.astro's
@@ -23,7 +23,7 @@ const result = token ? await fetchBookingLookup(import.meta.env.API_BASE_URL, te
       </div>
     ) : (
       (() => {
-        const reschedulable = isReschedulable(result.booking);
+        const reschedulable = isActionable(result.booking);
         if (!reschedulable.ok) {
           return (
             <div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">

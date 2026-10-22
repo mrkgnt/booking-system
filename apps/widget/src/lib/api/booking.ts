@@ -188,3 +188,32 @@ export async function rescheduleBooking(
     return { ok: false, error: "network_error" };
   }
 }
+
+export type CancelBookingResult =
+  | { ok: true; booking: Record<string, unknown> }
+  | { ok: false; error: string };
+
+// Issue #17 — against apps/api's existing /bookings/cancel contract
+// (cancelBookingSchema), reused unchanged: token only.
+export async function cancelBooking(
+  apiBaseUrl: string,
+  tenantSlug: string,
+  token: string,
+): Promise<CancelBookingResult> {
+  try {
+    const base = apiBaseUrl.replace(/\/+$/, "");
+    const res = await fetch(`${base}/bookings/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Tenant-Slug": tenantSlug },
+      body: JSON.stringify({ token }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      return { ok: false, error: (body && body.error) || `http_${res.status}` };
+    }
+    return { ok: true, booking: body.booking };
+  } catch (err) {
+    console.error(`[widget] POST /bookings/cancel errored for tenant "${tenantSlug}":`, err);
+    return { ok: false, error: "network_error" };
+  }
+}

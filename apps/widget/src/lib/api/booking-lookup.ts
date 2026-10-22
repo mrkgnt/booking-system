@@ -55,7 +55,7 @@ export async function fetchBookingLookup(
   }
 }
 
-export type ReschedulabilityResult =
+export type ActionabilityResult =
   | { ok: true }
   | { ok: false; reason: "already_finalized" | "already_passed" };
 
@@ -68,7 +68,12 @@ const FINALIZED_STATUSES = new Set(["cancelled", "completed", "no_show"]);
 // type) — that distinction never crosses the HTTP boundary. Re-derived
 // here instead of threading an extra response field through, since both
 // pieces of information (status, startsAt) are already in hand.
-export function isReschedulable(booking: { status: string; startsAt: string }): ReschedulabilityResult {
+//
+// Shared by both standalone pages (issue #16's reschedule, #17's cancel —
+// renamed from the #16-only "isReschedulable" once #17 needed the
+// identical check): a booking can be rescheduled OR cancelled exactly
+// when it's neither already finalized nor already passed.
+export function isActionable(booking: { status: string; startsAt: string }): ActionabilityResult {
   if (FINALIZED_STATUSES.has(booking.status)) {
     return { ok: false, reason: "already_finalized" };
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBookingLookupUrl, isReschedulable } from "../../../src/lib/api/booking-lookup.js";
+import { buildBookingLookupUrl, isActionable } from "../../../src/lib/api/booking-lookup.js";
 
 describe("buildBookingLookupUrl", () => {
   it("builds the GET /public/bookings/lookup URL with the token", () => {
@@ -27,41 +27,41 @@ describe("buildBookingLookupUrl", () => {
   });
 });
 
-describe("isReschedulable", () => {
+describe("isActionable", () => {
   const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
   it("is reschedulable for a confirmed booking in the future", () => {
-    expect(isReschedulable({ status: "confirmed", startsAt: future })).toEqual({ ok: true });
+    expect(isActionable({ status: "confirmed", startsAt: future })).toEqual({ ok: true });
   });
 
   it("is reschedulable for a still-pending-confirmation booking in the future", () => {
-    expect(isReschedulable({ status: "pending_verification", startsAt: future })).toEqual({ ok: true });
+    expect(isActionable({ status: "pending_verification", startsAt: future })).toEqual({ ok: true });
   });
 
   it("is not reschedulable once cancelled", () => {
-    expect(isReschedulable({ status: "cancelled", startsAt: future })).toEqual({
+    expect(isActionable({ status: "cancelled", startsAt: future })).toEqual({
       ok: false,
       reason: "already_finalized",
     });
   });
 
   it("is not reschedulable once completed", () => {
-    expect(isReschedulable({ status: "completed", startsAt: future })).toEqual({
+    expect(isActionable({ status: "completed", startsAt: future })).toEqual({
       ok: false,
       reason: "already_finalized",
     });
   });
 
   it("is not reschedulable once marked no_show", () => {
-    expect(isReschedulable({ status: "no_show", startsAt: future })).toEqual({
+    expect(isActionable({ status: "no_show", startsAt: future })).toEqual({
       ok: false,
       reason: "already_finalized",
     });
   });
 
   it("is not reschedulable once the appointment has already passed, even if still 'confirmed'", () => {
-    expect(isReschedulable({ status: "confirmed", startsAt: past })).toEqual({
+    expect(isActionable({ status: "confirmed", startsAt: past })).toEqual({
       ok: false,
       reason: "already_passed",
     });

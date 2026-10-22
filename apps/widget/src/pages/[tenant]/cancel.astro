@@ -1,0 +1,57 @@
+---
+import StandaloneDrawerLayout from "../../layouts/StandaloneDrawerLayout.astro";
+import CancelContent from "../../components/CancelContent.tsx";
+import { fetchBookingLookup, isActionable } from "../../lib/api/booking-lookup.js";
+
+// Issue #17 — cancellation link target: widget.platform.com/{tenant}/cancel?token=...
+// Same tenant-slug-in-path-segment convention as #16's reschedule page.
+const tenantSlug = Astro.params.tenant ?? "";
+const token = Astro.url.searchParams.get("token") ?? "";
+
+const result = token ? await fetchBookingLookup(import.meta.env.API_BASE_URL, tenantSlug, token) : null;
+---
+
+<StandaloneDrawerLayout title="Cancel your appointment">
+  {
+    !token || !result || !result.ok ? (
+      <div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+        <p class="text-sm text-muted-foreground">
+          This cancellation link is invalid or has expired. Please contact the business directly.
+        </p>
+      </div>
+    ) : (
+      (() => {
+        const actionable = isActionable(result.booking);
+        if (!actionable.ok) {
+          // More specific than reschedule.astro's equivalent branch: the
+          // customer followed a CANCEL link, so "this is already
+          // cancelled" is a meaningfully different, more useful message
+          // than lumping it in with "completed" the way reschedule's
+          // wording does.
+          let message: string;
+          if (actionable.reason === "already_passed") {
+            message = "This appointment has already passed.";
+          } else if (result.booking.status === "cancelled") {
+            message = "This booking has already been cancelled.";
+          } else {
+            message = "This booking has already been completed and can no longer be cancelled.";
+          }
+          return (
+            <div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+              <p class="text-sm text-muted-foreground">{message}</p>
+            </div>
+          );
+        }
+        return (
+          <CancelContent
+            client:load
+            booking={result.booking}
+            token={token}
+            tenantSlug={tenantSlug}
+            apiBaseUrl={import.meta.env.API_BASE_URL}
+          />
+        );
+      })()
+    )
+  }
+</StandaloneDrawerLayout>
