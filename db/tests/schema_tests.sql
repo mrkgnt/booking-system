@@ -609,6 +609,55 @@ begin
       case when v_blocked then null else 'insert unexpectedly succeeded' end);
 end $$;
 
+-- 23. anon CAN read business_profile.address (scoped column grant, issue
+-- #25's "find us" band) but NOT other business_profile columns.
+do $$
+declare
+  v_address_ok boolean := false;
+  v_name_blocked boolean := false;
+begin
+  begin
+    set local role anon;
+    perform address from business_profile;
+    reset role;
+    v_address_ok := true;
+  exception when insufficient_privilege then
+    reset role;
+  end;
+
+  begin
+    set local role anon;
+    perform name from business_profile;
+    reset role;
+  exception when insufficient_privilege then
+    reset role;
+    v_name_blocked := true;
+  end;
+
+  insert into test_results (test_name, passed, detail)
+    values ('anon can read business_profile.address but not other columns',
+      v_address_ok and v_name_blocked,
+      format('address_readable=%s name_blocked=%s', v_address_ok, v_name_blocked));
+end $$;
+
+-- 24. anon cannot WRITE to business_profile (read-only, single column)
+do $$
+declare
+  v_blocked boolean := false;
+begin
+  begin
+    set local role anon;
+    update business_profile set address = 'anon-test';
+    reset role;
+  exception when insufficient_privilege then
+    reset role;
+    v_blocked := true;
+  end;
+  insert into test_results (test_name, passed, detail)
+    values ('anon blocked from writing to business_profile', v_blocked,
+      case when v_blocked then null else 'update unexpectedly succeeded' end);
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Report
 -- ---------------------------------------------------------------------------
