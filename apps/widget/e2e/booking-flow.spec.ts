@@ -12,6 +12,14 @@ const API_BASE_URL = process.env.API_BASE_URL ?? "http://localhost:8787";
 // to spill into the next month is a known, accepted gap (same spirit as
 // this app's other documented near-midnight/date-boundary debt), not
 // handled here.
+//
+// Slot-time regex fix (found while building issue #16's reschedule page,
+// which reuses this exact pattern): AvailabilityStep.tsx's
+// toLocaleTimeString() renders 12-hour time with an AM/PM suffix in this
+// environment's locale (e.g. "09:30 AM"), not bare 24-hour "09:30" — the
+// original anchored `/^\d{1,2}:\d{2}$/` never actually matched anything,
+// but this test's own live-tenant-status skip meant it never ran far
+// enough to surface that until now.
 async function pickFirstAvailableSlot(frame: FrameLocator): Promise<void> {
   const today = new Date();
   for (let offset = 0; offset < 28; offset++) {
@@ -28,7 +36,7 @@ async function pickFirstAvailableSlot(frame: FrameLocator): Promise<void> {
     await dayCell.click();
     // Wait for this date's GET /availability round-trip to settle: either
     // the "no slots" copy or at least one slot button appears.
-    const slotButton = frame.locator("button").filter({ hasText: /^\d{1,2}:\d{2}$/ }).first();
+    const slotButton = frame.locator("button").filter({ hasText: /^\d{1,2}:\d{2}(\s?[AP]M)?$/i }).first();
     const noSlots = frame.getByText("No available times on this date.");
     await Promise.race([slotButton.waitFor({ timeout: 5000 }), noSlots.waitFor({ timeout: 5000 })]).catch(() => {
       // Neither appeared within 5s on this particular day — treat as no

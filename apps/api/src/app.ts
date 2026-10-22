@@ -51,11 +51,12 @@ app.use(
 // from apps/api's perspective (one shared apps/widget deployment serves
 // every Tenant's embed), so this needs the same wide-open CORS as
 // /public/*. Scoped to exactly these three paths — NOT a blanket /admin/*
-// change, and deliberately NOT /bookings/cancel or /bookings/reschedule
-// (those are issues #16/#17's scope: the standalone, non-iframe
-// cancel/reschedule pages, not this ticket's). /bookings and
-// /bookings/confirm are POST with a JSON body, so they need
-// Content-Type in allowHeaders in addition to X-Tenant-Slug.
+// change. /bookings/cancel and /bookings/reschedule get the same
+// treatment further below, added by issues #16/#17 (the standalone,
+// non-iframe cancel/reschedule pages) rather than here, since #14 never
+// built those pages. /bookings and /bookings/confirm are POST with a
+// JSON body, so they need Content-Type in allowHeaders in addition to
+// X-Tenant-Slug.
 app.use(
   "/availability",
   cors({
@@ -74,6 +75,27 @@ app.use(
 );
 app.use(
   "/bookings/confirm",
+  cors({
+    origin: "*",
+    allowHeaders: ["Content-Type", "X-Tenant-Slug"],
+    allowMethods: ["POST", "OPTIONS"],
+  }),
+);
+
+// Issues #16/#17: the standalone (non-iframe) reschedule/cancel pages call
+// these two directly from their own top-level page, same arbitrary-in-
+// advance widget origin as above — deliberately excluded from #14's CORS
+// scope above since #14 didn't build these pages.
+app.use(
+  "/bookings/reschedule",
+  cors({
+    origin: "*",
+    allowHeaders: ["Content-Type", "X-Tenant-Slug"],
+    allowMethods: ["POST", "OPTIONS"],
+  }),
+);
+app.use(
+  "/bookings/cancel",
   cors({
     origin: "*",
     allowHeaders: ["Content-Type", "X-Tenant-Slug"],

@@ -156,3 +156,35 @@ export async function confirmBooking(
     return { ok: false, error: "network_error" };
   }
 }
+
+export type RescheduleBookingResult =
+  | { ok: true; booking: Record<string, unknown> }
+  | { ok: false; error: string };
+
+// Issue #16 — against apps/api's existing /bookings/reschedule contract
+// (rescheduleBookingSchema), reused unchanged: token + newStartsAt only.
+// The server derives the new endsAt from the booking's own service
+// duration, same "never trust a client-submitted end time" rule
+// createBooking's startsAt-only shape already follows.
+export async function rescheduleBooking(
+  apiBaseUrl: string,
+  tenantSlug: string,
+  params: { token: string; newStartsAt: string },
+): Promise<RescheduleBookingResult> {
+  try {
+    const base = apiBaseUrl.replace(/\/+$/, "");
+    const res = await fetch(`${base}/bookings/reschedule`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Tenant-Slug": tenantSlug },
+      body: JSON.stringify({ token: params.token, newStartsAt: params.newStartsAt }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      return { ok: false, error: (body && body.error) || `http_${res.status}` };
+    }
+    return { ok: true, booking: body.booking };
+  } catch (err) {
+    console.error(`[widget] POST /bookings/reschedule errored for tenant "${tenantSlug}":`, err);
+    return { ok: false, error: "network_error" };
+  }
+}

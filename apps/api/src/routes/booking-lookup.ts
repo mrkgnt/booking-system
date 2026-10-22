@@ -74,6 +74,15 @@ bookingLookupRoute.get("/public/bookings/lookup", tenantMiddleware, rateLimitMid
       status: booking.status,
       startsAt: booking.starts_at,
       endsAt: booking.ends_at,
+      // serviceId/staffId (issue #16): not customer-sensitive — exposed so
+      // the widget's reschedule page can scope the same AvailabilityStep
+      // component used by the main booking flow to this exact
+      // service/staff without a second lookup. staffId is omitted
+      // (undefined, not null) rather than always present as null, to
+      // match AvailabilityStep's existing optional `staffId?: string` prop
+      // shape used everywhere else in this app.
+      serviceId: booking.service_id,
+      staffId: booking.staff_id ?? undefined,
       service: {
         name: resolveLocaleString(nameMap, locale, defaultLocale),
         description: resolveLocaleString(descriptionMap, locale, defaultLocale),

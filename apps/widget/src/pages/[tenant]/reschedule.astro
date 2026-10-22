@@ -1,0 +1,50 @@
+---
+import StandaloneDrawerLayout from "../../layouts/StandaloneDrawerLayout.astro";
+import RescheduleContent from "../../components/RescheduleContent.tsx";
+import { fetchBookingLookup, isReschedulable } from "../../lib/api/booking-lookup.js";
+
+// Issue #16 — reschedule link target: widget.platform.com/{tenant}/reschedule?token=...
+// Path segment for the tenant slug (not a query param like drawer.astro's
+// ?tenant=), since this is a page meant to be linked/bookmarked directly
+// from a confirmation email, unlike the iframe's internal src URL.
+const tenantSlug = Astro.params.tenant ?? "";
+const token = Astro.url.searchParams.get("token") ?? "";
+
+const result = token ? await fetchBookingLookup(import.meta.env.API_BASE_URL, tenantSlug, token) : null;
+---
+
+<StandaloneDrawerLayout title="Reschedule your appointment">
+  {
+    !token || !result || !result.ok ? (
+      <div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+        <p class="text-sm text-muted-foreground">
+          This reschedule link is invalid or has expired. Please contact the business directly.
+        </p>
+      </div>
+    ) : (
+      (() => {
+        const reschedulable = isReschedulable(result.booking);
+        if (!reschedulable.ok) {
+          return (
+            <div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+              <p class="text-sm text-muted-foreground">
+                {reschedulable.reason === "already_finalized"
+                  ? "This booking has already been cancelled or completed and can no longer be rescheduled."
+                  : "This appointment has already passed and can no longer be rescheduled."}
+              </p>
+            </div>
+          );
+        }
+        return (
+          <RescheduleContent
+            client:load
+            booking={result.booking}
+            token={token}
+            tenantSlug={tenantSlug}
+            apiBaseUrl={import.meta.env.API_BASE_URL}
+          />
+        );
+      })()
+    )
+  }
+</StandaloneDrawerLayout>

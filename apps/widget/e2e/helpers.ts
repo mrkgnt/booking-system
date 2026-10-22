@@ -165,3 +165,93 @@ export function stopWidgetServerWithUnreachableApi(): Promise<void> {
     proc.kill();
   });
 }
+
+// --- Issues #16/#17: minting a real confirmed booking directly via the API ---
+//
+// The standalone reschedule/cancel pages' own endpoints (GET /public/
+// bookings/lookup, POST /bookings/reschedule, POST /bookings/cancel)
+// don't depend on business_profile.status at all — unlike the embedded
+// Drawer's catalog display, which is still blocked by the live "dentdi"
+// tenant's "onboarding" status (see booking-flow.spec.ts's own comment).
+// That means a REAL happy-path E2E run for these two pages is achievable
+// right now, but only by minting the test booking directly against
+// apps/api rather than driving the (still-blocked) booking UI — the same
+// GET /availability -> POST /bookings -> POST /bookings/confirm chain
+// booking-flow.spec.ts itself drives through the UI once the tenant's
+// active.
+//
+// Known real, seeded Dent Di catalog ids (confirmed directly against the
+// live project via Supabase REST + the anon key — the one piece of
+// catalog data that's reachable without going through the gated
+// /public/tenant-info route) — fragile against a reseed, same accepted-
+// debt spirit as this suite's existing hardcoded "dentdi" tenant slug.
+const KNOWN_SERVICE_ID = "8831eea5-5bee-4ca1-a2e9-01a028ba3b35";
+const KNOWN_STAFF_ID = "017e5802-ff0f-4ad7-a87a-204b3af1a7d2";
+
+export type ConfirmedTestBooking = {
+  bookingId: string;
+  startsAt: string;
+  rescheduleToken: string;
+  cancelToken: string;
+};
+
+// Searches forward from tomorrow (day offset, not today — avoids the
+// MIN_BOOKING_LEAD_MINUTES same-day lead-time rejection) for a slot
+// that's actually free right now, since other test runs' bookings
+// accumulate against this same live project over time. Mints a real
+// booking, confirms it, and returns the real reschedule/cancel capability
+// tokens from the confirm response's dev-only fields (same mechanism
+// booking-flow.spec.ts uses for its own confirm step).
+export async function createConfirmedTestBooking(apiBaseUrl: string): Promise<ConfirmedTestBooking> {
+  for (let offset = 1; offset < 28; offset++) {
+    const day = new Date();
+    day.setDate(day.getDate() + offset);
+    const y = day.getFullYear();
+    const m = String(day.getMonth() + 1).padStart(2, "0");
+    const d = String(day.getDate()).padStart(2, "0");
+    const dateKey = `${y}-${m}-${d}`;
+
+    const availRes = await fetch(
+      `${apiBaseUrl}/availability?service_id=${KNOWN_SERVICE_ID}&staff_id=${KNOWN_STAFF_ID}&date=${dateKey}`,
+      { headers: { "X-Tenant-Slug": "dentdi" } },
+    );
+    const availBody = await availRes.json().catch(() => null);
+    const slot = availBody?.slots?.[0];
+    if (!slot) continue;
+
+    const bookingRes = await fetch(`${apiBaseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Tenant-Slug": "dentdi" },
+      body: JSON.stringify({
+        serviceId: KNOWN_SERVICE_ID,
+        staffId: KNOWN_STAFF_ID,
+        startsAt: slot.startsAt,
+        locale: "en",
+        customer: { name: "Widget E2E Setup", email: `widget-e2e-setup-${Date.now()}@example.com` },
+        consentGiven: true,
+        idempotencyKey: `widget-e2e-setup-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      }),
+    });
+    const bookingBody = await bookingRes.json().catch(() => null);
+    if (!bookingRes.ok || !bookingBody?._dev_confirm_url) continue; // slot taken between check and create — try the next day
+
+    const confirmToken = new URL(bookingBody._dev_confirm_url).searchParams.get("token")!;
+    const confirmRes = await fetch(`${apiBaseUrl}/bookings/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Tenant-Slug": "dentdi" },
+      body: JSON.stringify({ token: confirmToken }),
+    });
+    const confirmBody = await confirmRes.json().catch(() => null);
+    if (!confirmRes.ok || !confirmBody?._dev_reschedule_url || !confirmBody?._dev_cancel_url) {
+      throw new Error(`Failed to confirm the test booking: ${JSON.stringify(confirmBody)}`);
+    }
+
+    return {
+      bookingId: bookingBody.booking.id,
+      startsAt: slot.startsAt,
+      rescheduleToken: new URL(confirmBody._dev_reschedule_url).searchParams.get("token")!,
+      cancelToken: new URL(confirmBody._dev_cancel_url).searchParams.get("token")!,
+    };
+  }
+  throw new Error("No available slot found for the known test service/staff in the next 28 days");
+}
