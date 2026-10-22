@@ -61,4 +61,12 @@ describe("getMessage", () => {
     expect(getMessage("language", "lv")).toBe("Valoda");
     expect(getMessage("language", "ru")).toBe("Язык");
   });
+
+  // Issue #15 — the brief note shown while a saved booking draft's slot is
+  // being silently re-validated on resume.
+  it("returns the localized resuming_draft message for each supported locale", () => {
+    expect(getMessage("resuming_draft", "en")).toBe("Resuming your previous selection…");
+    expect(getMessage("resuming_draft", "lv")).toBe("Jūsu iepriekšējā izvēle tiek atjaunota…");
+    expect(getMessage("resuming_draft", "ru")).toBe("Восстанавливаем ваш предыдущий выбор…");
+  });
 });

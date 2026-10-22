@@ -30,7 +30,13 @@ export function resolveLocale(locale?: string | null, fallback: Locale = DEFAULT
   return fallback;
 }
 
-export type MessageKey = "unavailable" | "language";
+// "resuming_draft": issue #15's brief "checking your previous selection"
+// note shown only during the one async window a resumed draft can have —
+// re-validating a saved "contact" step's slot against a fresh availability
+// check before deciding whether to resume there or bounce back. "service"/
+// "availability" drafts resume synchronously (no locked-in slot to check),
+// so this message never appears for those.
+export type MessageKey = "unavailable" | "language" | "resuming_draft";
 
 const MESSAGES: Record<MessageKey, Record<Locale, string>> = {
   unavailable: {
@@ -46,6 +52,11 @@ const MESSAGES: Record<MessageKey, Record<Locale, string>> = {
     en: "Language",
     lv: "Valoda",
     ru: "Язык",
+  },
+  resuming_draft: {
+    en: "Resuming your previous selection…",
+    lv: "Jūsu iepriekšējā izvēle tiek atjaunota…",
+    ru: "Восстанавливаем ваш предыдущий выбор…",
   },
 };
 

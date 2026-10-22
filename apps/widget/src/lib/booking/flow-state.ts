@@ -13,7 +13,18 @@ import type { AvailabilitySlot } from "../api/booking.js";
 export type FlowState =
   | { step: "service" }
   | { step: "availability"; serviceId: string; staffId?: string; notice?: "slot_taken" }
-  | { step: "contact"; serviceId: string; staffId?: string; slot: AvailabilitySlot }
+  | {
+      step: "contact";
+      serviceId: string;
+      staffId?: string;
+      slot: AvailabilitySlot;
+      // Mirrors ContactStep's own local form state (issue #15) purely so it
+      // can be persisted/resumed as part of the draft — ContactStep itself
+      // stays the source of truth for rendering; this is a one-way copy
+      // written via UPDATE_CONTACT_DRAFT, not read back by ContactStep
+      // except as its resume-time initial value.
+      contactDraft?: { name?: string; email?: string; phone?: string };
+    }
   | {
       step: "confirm_pending";
       serviceId: string;
@@ -39,7 +50,15 @@ export type FlowAction =
   | { type: "CONFIRMED" }
   | { type: "SLOT_TAKEN" }
   | { type: "BACK" }
-  | { type: "RESTART" };
+  | { type: "RESTART" }
+  // Issue #15 — applies an already-resolved resume state (plain state, not
+  // selected slot: produced by resolveDraftResume against either the saved
+  // draft as-is or a bounced-back "slot taken" availability state) outright,
+  // from whatever step the reducer happened to start in.
+  | { type: "RESUME_DRAFT"; state: FlowState }
+  // Issue #15 — mirrors ContactStep's own local field state back into the
+  // reducer, so it becomes part of what gets persisted as the draft.
+  | { type: "UPDATE_CONTACT_DRAFT"; contact: { name?: string; email?: string; phone?: string } };
 
 export function initialFlowState(): FlowState {
   return { step: "service" };
@@ -104,6 +123,13 @@ export function reduceFlowState(state: FlowState, action: FlowAction): FlowState
     // "already on service" in every other case.
     case "RESTART":
       return initialFlowState();
+
+    case "RESUME_DRAFT":
+      return action.state;
+
+    case "UPDATE_CONTACT_DRAFT":
+      if (state.step !== "contact") return state;
+      return { ...state, contactDraft: { ...state.contactDraft, ...action.contact } };
 
     default:
       return state;

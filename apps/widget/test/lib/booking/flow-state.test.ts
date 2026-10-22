@@ -117,4 +117,51 @@ describe("booking flow state machine", () => {
     const next = reduceFlowState(confirmed, { type: "RESTART" });
     expect(next).toEqual({ step: "service" });
   });
+
+  // Issue #15 — resuming a persisted draft (possibly already revalidated
+  // against a fresh availability check) replaces whatever state the
+  // reducer started in, regardless of where it started. A thin passthrough
+  // rather than a new "resuming" state machine, so the resumed state stays
+  // the single source of truth for the UI either way.
+  it("RESUME_DRAFT replaces the current state outright, from any starting step", () => {
+    const next = reduceFlowState(initialFlowState(), {
+      type: "RESUME_DRAFT",
+      state: { step: "availability", serviceId: "svc-1", staffId: "staff-1" },
+    });
+    expect(next).toEqual({ step: "availability", serviceId: "svc-1", staffId: "staff-1" });
+  });
+
+  // Issue #15 — the contact step's typed-but-not-yet-submitted fields need
+  // to be part of what's persisted/resumed too (acceptance criteria:
+  // "contact info fields"), even though they live in ContactStep's own
+  // local state day-to-day — UPDATE_CONTACT_DRAFT is how DrawerContent
+  // mirrors that local state back into the reducer for persistence.
+  it("UPDATE_CONTACT_DRAFT merges partial contact fields while on the contact step", () => {
+    const onContact = {
+      step: "contact" as const,
+      serviceId: "svc-1",
+      staffId: "staff-1",
+      slot: { staffId: "staff-1", startsAt: "2026-11-01T10:00:00.000Z", endsAt: "2026-11-01T10:45:00.000Z" },
+    };
+    const next = reduceFlowState(onContact, {
+      type: "UPDATE_CONTACT_DRAFT",
+      contact: { name: "Jane" },
+    });
+    expect(next).toEqual({ ...onContact, contactDraft: { name: "Jane" } });
+
+    const next2 = reduceFlowState(next, {
+      type: "UPDATE_CONTACT_DRAFT",
+      contact: { email: "jane@example.com" },
+    });
+    expect(next2).toEqual({ ...onContact, contactDraft: { name: "Jane", email: "jane@example.com" } });
+  });
+
+  it("UPDATE_CONTACT_DRAFT is a no-op outside the contact step", () => {
+    const onAvailability = { step: "availability" as const, serviceId: "svc-1" };
+    const next = reduceFlowState(onAvailability, {
+      type: "UPDATE_CONTACT_DRAFT",
+      contact: { name: "Jane" },
+    });
+    expect(next).toEqual(onAvailability);
+  });
 });
