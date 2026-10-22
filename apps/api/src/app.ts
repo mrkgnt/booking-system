@@ -15,6 +15,8 @@ import { adminServicesRoute } from "./routes/admin-services.js";
 import { adminStaffRoute } from "./routes/admin-staff.js";
 import { adminBusinessHoursRoute } from "./routes/admin-business-hours.js";
 import { adminClosuresRoute } from "./routes/admin-closures.js";
+import { adminSiteSectionsRoute } from "./routes/admin-site-sections.js";
+import { adminSiteContentRoute } from "./routes/admin-site-content.js";
 
 // Runtime-agnostic — no @hono/node-server, no wrangler/Vercel-specific code
 // here. Local dev wraps this in src/index.ts; a Workers/Vercel entry later
@@ -87,3 +89,5 @@ app.route("/", adminServicesRoute);
 app.route("/", adminStaffRoute);
 app.route("/", adminBusinessHoursRoute);
 app.route("/", adminClosuresRoute);
+app.route("/", adminSiteSectionsRoute);
+app.route("/", adminSiteContentRoute);
