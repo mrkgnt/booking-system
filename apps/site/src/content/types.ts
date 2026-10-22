@@ -29,5 +29,10 @@ export type SiteCopy = {
     upToPricePrefix: string;
     note: string;
   };
-  footer: { rights: string };
+  footer: { rights: string; backToTop: string };
+  // "Find us" band (issue #25): Maps/Waze links are built at render time
+  // from business_profile.address, not a Site Content field — only these
+  // chrome labels (heading/button text) live here, same as every other
+  // structural UI string in this file.
+  findUs: { heading: string; mapsLabel: string; wazeLabel: string };
 };

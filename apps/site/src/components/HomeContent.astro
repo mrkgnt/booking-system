@@ -1,10 +1,14 @@
 ---
 import { Button } from "@/components/ui/button";
-import type { Locale, SiteCopy } from "@/content/types";
+import FindUs from "@/components/FindUs.astro";
+import QuickContact from "@/components/QuickContact.astro";
+import ValueProps from "@/components/ValueProps.astro";
 import Hero from "@/components/sections/Hero.astro";
 import About from "@/components/sections/About.astro";
 import Team from "@/components/Team.astro";
 import Gallery from "@/components/Gallery.astro";
+import type { Locale, SiteCopy } from "@/content/types";
+import { getBusinessAddress, getFieldValueByKey, getFirstFieldValueByType, getSiteContent, parseLines } from "@/lib/site-content";
 
 interface Props {
   copy: SiteCopy;
@@ -12,6 +16,20 @@ interface Props {
 }
 
 const { copy, locale } = Astro.props;
+
+const restConfig = { supabaseUrl: import.meta.env.SUPABASE_URL, anonKey: import.meta.env.SUPABASE_ANON_KEY };
+
+// Site Content fetch for this ticket's 3 sections (issue #25: value-props
+// checklist, quick-contact card row, find-us band). Hero/About (#22) and
+// Team/Gallery (#23) each fetch their own section independently via
+// getSectionContent — this one pulls the whole-page bundle instead
+// (getSiteContent) since value_props/quick_contact need lookups by field
+// type/key across sections, not just one section's resolved values.
+const siteContent = await getSiteContent(restConfig, "home", locale);
+const valuePropsItems = parseLines(getFirstFieldValueByType(siteContent, "value_props", "textarea"));
+const whatsappUrl = getFieldValueByKey(siteContent, "quick_contact", "whatsapp_url");
+const telegramUrl = getFieldValueByKey(siteContent, "quick_contact", "telegram_url");
+const address = await getBusinessAddress(restConfig);
 ---
 
 <!-- SECTION: hero (ticket #22, Site Content CMS, ADR-0005) -->
@@ -20,10 +38,6 @@ const { copy, locale } = Astro.props;
 <!-- SECTION: about (ticket #22, Site Content CMS, ADR-0005) -->
 <About locale={locale} />
 
-<!-- SECTION: value_props/contact/find_us/footer (ticket #25) land below as
-     their own insertion lines once built — everything from here down is
-     still the pre-CMS hardcoded `copy`, untouched by this ticket. -->
-
 {/* Team + Gallery (ticket #23) — reads apps/site/src/lib/team.ts +
     apps/site/src/lib/site-content.ts directly (staff table / gallery
     Site Content field), not `copy`. Self-contained components; this is
@@ -31,6 +45,9 @@ const { copy, locale } = Astro.props;
     Gallery.astro for the actual render logic. */}
 <Team />
 <Gallery />
+
+<!-- SECTION: value_props (ticket #25) -->
+<ValueProps items={valuePropsItems} />
 
 <section class="mx-auto max-w-5xl px-4 sm:px-6 py-16 grid gap-10 sm:grid-cols-2">
   <div>
@@ -60,9 +77,13 @@ const { copy, locale } = Astro.props;
           {copy.contact.email}
         </a>
       </p>
+      <QuickContact whatsappUrl={whatsappUrl} telegramUrl={telegramUrl} />
       <Button data-platform-book variant="outline" className="mt-2">
         {copy.nav.bookNow}
       </Button>
     </div>
   </div>
 </section>
+
+<!-- SECTION: find_us (ticket #25) -->
+<FindUs address={address} heading={copy.findUs.heading} mapsLabel={copy.findUs.mapsLabel} wazeLabel={copy.findUs.wazeLabel} />

@@ -54,5 +54,10 @@ export const ru: SiteCopy = {
     upToPricePrefix: "до",
     note: "Точная стоимость плана лечения определяется после индивидуальной консультации.",
   },
-  footer: { rights: "Все права защищены." },
+  footer: { rights: "Все права защищены.", backToTop: "Наверх" },
+  findUs: {
+    heading: "Как нас найти",
+    mapsLabel: "Открыть Google Maps",
+    wazeLabel: "Поехать с Waze",
+  },
 };

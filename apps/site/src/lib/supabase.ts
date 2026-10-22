@@ -4,7 +4,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 // (ADR-0005's "apps/site reads Site Content/staff directly, not proxied
 // through apps/api" decision — the same "Public catalog reads" pattern
 // services/staff/business_hours already use). No service-role key, no
-// write path — only SELECT-granted, RLS-gated tables are reachable here.
+// write path — only SELECT-granted, RLS-gated tables are reachable here,
+// including business_profile.address (a scoped anon GRANT added
+// specifically for the "find us" band, issue #25 — see
+// db/tenant-schema.sql's "PUBLIC CATALOG READ ACCESS" section).
 //
 // Deliberately untyped (no generated Database type import across apps,
 // unlike apps/admin's lib/supabase/server.ts) — apps/site stays
