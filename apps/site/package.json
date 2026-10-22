@@ -2,7 +2,7 @@
   "name": "@booking-system/site",
   "private": true,
   "type": "module",
-  "description": "Dent Di's public marketing site (Astro, static) — embeds the Booking Widget (apps/widget) rather than reimplementing booking-flow code.",
+  "description": "Dent Di's public marketing site (Astro, SSR) — embeds the Booking Widget (apps/widget) rather than reimplementing booking-flow code.",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
@@ -10,6 +10,7 @@
     "typecheck": "astro check && tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@astrojs/node": "^9.1.0",
     "@astrojs/react": "^4.2.0",
     "@fontsource-variable/geist": "^5.3.0",
     "astro": "^5.9.0",
