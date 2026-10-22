@@ -478,6 +478,68 @@ detail: see `PROJECT_CONTEXT.md`.
       will record the replacement once it's actually built (interview
       only so far — see `GLOSSARY.md`'s new **Section**/**Site
       Content** terms for the vocabulary that came out of it).
+- [x] **`apps/site` redesign + schema-driven Site Content CMS, ADR-0005
+      (2026-10-22).** The replacement promised above: issue #18's spec
+      broken into 10 tracer-bullet tickets (#19-28, dependency-ordered
+      task graph), built by implementer subagents each in its own git
+      worktree, merged onto an integration branch (`site-cms-integration`)
+      via dedicated merger subagents, then pushed to `main`. 9/10 tickets
+      closed; #26 (real Dent Di catalog data) stays open — built and
+      merged, but the live purge+reseed step deletes 122 existing
+      bookings and needs explicit go-ahead before running, so it was
+      deliberately left as a manual step rather than run mid-build.
+      - **Schema**: `site_sections` (developer-owned Section field
+        definitions) + `site_content` (Tenant-editable values),
+        generic across every Tenant in `db/tenant-schema.sql`, same
+        two-tier RLS/grant pattern as the existing public catalog
+        tables. A real mid-build finding: `apps/site` initially read
+        `business_profile.address` (for the "find us" band) via the
+        secret/service-role key, since that table had no `anon` grant
+        — a genuine security-scope question, not a cosmetic merge
+        conflict, surfaced while reconciling three independently-built
+        tickets that each touched the same file. Resolved (with the
+        user) by adding a scoped `grant select (address)` instead,
+        keeping `apps/site` anon-key-only like every other read it
+        does. `db/seed/site-sections-home.sql` seeds the schema
+        (found missing/uncommitted by the closing code review — fixed
+        before merge).
+      - **`apps/api`**: two new admin routes (`GET /admin/site-sections`,
+        `GET`/`PUT /admin/site-content`), same `tenantMiddleware` →
+        `staffAuthMiddleware` → per-request Supabase client pattern as
+        every other admin route.
+      - **`apps/admin`**: a new, fully generic "Site Content" screen —
+        renders itself from whatever a page's `site_sections` schema
+        declares (no per-section hardcoded form code), built via the
+        same red→green-proven TDD-split process (implementation
+        temporarily pulled out to confirm the E2E spec genuinely failed
+        first) already used for every other admin screen.
+      - **`apps/site`**: reverted to `output: "server"` (from the prior
+        pass's static output — the live-editable CMS needs a saved
+        admin edit to show up with no rebuild step); visual tokens
+        replaced with the reference design's actual Geist/olive-green
+        values (Georgia serif dropped); full section set (hero, about,
+        team, gallery, searchable/filterable price list, value-props,
+        quick-contact, find-us, footer); every "book now" CTA still
+        opens the Booking Widget drawer unchanged (ADR-0004), no custom
+        form introduced. Gained its first-ever test suite (vitest +
+        Playwright `e2e/`) from zero, including the one test that
+        actually proves the feature's reason for existing: an edit
+        saved via `apps/admin`'s Site Content screen is visible on
+        `apps/site`'s next page load with no redeploy.
+      - **Code review** (two-axis, before merge): 0 Standards hard
+        violations; two judgement-call duplication findings (locale-
+        fallback logic and the Supabase REST fetch-wrapper shape each
+        gained a couple more independent reimplementations) logged
+        below as accepted debt, matching this repo's existing
+        precedent for the same kind of finding; one real Spec gap
+        (the uncommitted seed above) found and fixed before merge.
+      - **Open, not resolved by this pass**: real Dent Di catalog data
+        still not live (#26, above); the reference design's logo/
+        favicon reuse (mentioned in the spec's narrative) was never
+        actually wired into `apps/site` — no favicon, plain-text
+        wordmark; a harmless orphaned leftover test row in the live
+        `services` table (`category_id` null, never renders) from an
+        unrelated earlier E2E run.
 
 ## Open / Non-Blocking Items
 
@@ -505,6 +567,24 @@ detail: see `PROJECT_CONTEXT.md`.
   independently implement the same locale-fallback logic. Accepted
   debt (found via code review, 2026-10-22) — a shared `apps/api/src/
   lib/` helper would be the fix, low priority at 2 call sites.
+  **Update (2026-10-22, ADR-0005 code review):** two more independent
+  reimplementations added (`apps/site/src/lib/team.ts`'s
+  `resolveLocale`, `apps/site/src/lib/catalog/fetch.ts`'s
+  `resolveTranslation`) — now 4 call sites, not 2. Each is
+  self-documented as a deliberate, precedent-following choice, so
+  still accepted debt, not a new violation — but worth re-weighing
+  the "low priority at 2 call sites" framing next time this area is
+  touched, since the count has doubled.
+- The Supabase REST fetch-wrapper shape already flagged above for
+  `apps/widget` is independently reimplemented three more times by
+  the ADR-0005 work (found via code review, 2026-10-22):
+  `apps/site/src/lib/site-content.ts`'s `fetchSectionSchema`/
+  `fetchAllSectionSchemas`/`fetchContentByLocale`/`getBusinessAddress`
+  (same shape repeated inline four times in one file) and
+  `apps/site/src/lib/catalog/fetch.ts`'s `restGet` (at least factored
+  into one generic function within its own file). Accepted debt,
+  matching the existing precedent — revisit alongside the
+  `apps/widget` instance above if this area needs real consolidation.
 - Content accuracy of demo pricing/staff/hours — needs client review.
   **Partially addressed** by the `apps/site` scaffold above: real
   hours/contact/team copy and a curated real-price subset (3 items ×
