@@ -1,0 +1,36 @@
+---
+import AdminLayout from "../layouts/AdminLayout.astro";
+import SiteContentScreen from "../components/SiteContentScreen.tsx";
+import { listSiteSections, getSiteContent } from "../lib/api/site-content.js";
+import { getMe } from "../lib/api/me.js";
+
+const session = Astro.locals.session!;
+const apiConfig = {
+  baseUrl: import.meta.env.API_BASE_URL,
+  tenantSlug: import.meta.env.TENANT_SLUG,
+  accessToken: session.accessToken,
+};
+
+// "home" is the only page with seeded Sections right now (ADR-0005) — a
+// page switcher is out of scope until a second page actually exists.
+const page = "home";
+// LV is Dent Di's default_locale (CLAUDE.md's "Locales at launch" row) —
+// matches the order the existing lv/ru/en catalog fields already use.
+const defaultLocale = "lv";
+
+const [sections, siteContent, me] = await Promise.all([
+  listSiteSections(apiConfig, page),
+  getSiteContent(apiConfig, page, defaultLocale),
+  getMe(apiConfig),
+]);
+---
+<AdminLayout title="Site Content" customerLabel={me.customerLabel}>
+  <SiteContentScreen
+    client:load
+    apiConfig={apiConfig}
+    page={page}
+    sections={sections}
+    initialLocale={defaultLocale}
+    initialContent={siteContent.content}
+  />
+</AdminLayout>
