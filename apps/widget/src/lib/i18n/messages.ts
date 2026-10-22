@@ -36,7 +36,7 @@ export function resolveLocale(locale?: string | null, fallback: Locale = DEFAULT
 // check before deciding whether to resume there or bounce back. "service"/
 // "availability" drafts resume synchronously (no locked-in slot to check),
 // so this message never appears for those.
-export type MessageKey = "unavailable" | "language" | "resuming_draft";
+export type MessageKey = "unavailable" | "language" | "resuming_draft" | "close";
 
 const MESSAGES: Record<MessageKey, Record<Locale, string>> = {
   unavailable: {
@@ -57,6 +57,14 @@ const MESSAGES: Record<MessageKey, Record<Locale, string>> = {
     en: "Resuming your previous selection…",
     lv: "Jūsu iepriekšējā izvēle tiek atjaunota…",
     ru: "Восстанавливаем ваш предыдущий выбор…",
+  },
+  // The close-button aria-label (mobile full-screen takeover has no
+  // backdrop to tap — see public/embed.js's mobile breakpoint CSS — so
+  // this button is the only way to dismiss the drawer there).
+  close: {
+    en: "Close",
+    lv: "Aizvērt",
+    ru: "Закрыть",
   },
 };
 

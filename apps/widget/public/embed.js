@@ -183,6 +183,24 @@
       isOpen = false;
     }
 
+    // The drawer's own in-content close button (DrawerContent.tsx) runs
+    // inside the iframe, a different window from this one — it can't call
+    // close() directly, so it posts a message instead (see
+    // src/lib/close-widget.ts). Matters most on mobile: the full-screen
+    // takeover has its backdrop dimming/click-to-close explicitly zeroed
+    // out (see the mobile breakpoint CSS above), so without this the
+    // drawer had no way to be dismissed at all below that breakpoint.
+    // Guarded on event.source being our own iframe's window, not just the
+    // message shape, so an unrelated postMessage elsewhere on the host
+    // page's origin can't trigger a close.
+    window.addEventListener("message", function (event) {
+      if (!iframeEl || event.source !== iframeEl.contentWindow) return;
+      var data = event.data;
+      if (data && data.source === "platform-widget" && data.type === "close") {
+        close();
+      }
+    });
+
     if (!config.hideDefaultButton) {
       createTrigger(doc, open);
     }

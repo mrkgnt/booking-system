@@ -5,6 +5,7 @@ import ContactStep, { type ContactInfo } from "@/components/booking/ContactStep"
 import ConfirmPendingStep from "@/components/booking/ConfirmPendingStep";
 import ConfirmedStep from "@/components/booking/ConfirmedStep";
 import LocaleSwitcher from "@/components/LocaleSwitcher.js";
+import CloseButton from "@/components/CloseButton.js";
 import { useLocaleSwitcher } from "@/lib/use-locale-switcher.js";
 import { createBooking, fetchAvailability } from "@/lib/api/booking.js";
 import { initialFlowState, reduceFlowState, type FlowState } from "@/lib/booking/flow-state.js";
@@ -69,8 +70,13 @@ function toDateKey(date: Date): string {
 export default function DrawerContent({ tenantInfo, tenantSlug, apiBaseUrl, locale }: Props) {
   if (!tenantInfo) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-        <p className="text-sm text-muted-foreground">{getMessage("unavailable", locale)}</p>
+      <div className="flex h-full flex-col">
+        <div className="flex justify-end p-2">
+          <CloseButton locale={locale} />
+        </div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 pt-0 text-center">
+          <p className="text-sm text-muted-foreground">{getMessage("unavailable", locale)}</p>
+        </div>
       </div>
     );
   }
@@ -245,8 +251,13 @@ function DrawerContentLoaded({
   // wrong step for an instant before RESUME_DRAFT corrects it).
   if (pendingContactDraft) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-        <p className="text-sm text-muted-foreground">{getMessage("resuming_draft", activeLocale)}</p>
+      <div className="flex h-full flex-col">
+        <div className="flex justify-end p-2">
+          <CloseButton locale={activeLocale} />
+        </div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 pt-0 text-center">
+          <p className="text-sm text-muted-foreground">{getMessage("resuming_draft", activeLocale)}</p>
+        </div>
       </div>
     );
   }
@@ -255,12 +266,15 @@ function DrawerContentLoaded({
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-6">
       <header className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">{tenantInfo.tenant.name}</h1>
-        <LocaleSwitcher
-          supportedLocales={tenantInfo.tenant.supportedLocales}
-          activeLocale={activeLocale}
-          onLocaleChange={switchLocale}
-          disabled={isSwitching}
-        />
+        <div className="flex items-center gap-1">
+          <LocaleSwitcher
+            supportedLocales={tenantInfo.tenant.supportedLocales}
+            activeLocale={activeLocale}
+            onLocaleChange={switchLocale}
+            disabled={isSwitching}
+          />
+          <CloseButton locale={activeLocale} />
+        </div>
       </header>
 
       {state.step === "service" && (

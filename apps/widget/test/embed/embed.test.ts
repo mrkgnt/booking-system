@@ -86,6 +86,12 @@ interface FakeElement {
   dataset: Record<string, string>;
   style: Record<string, string>;
   children: FakeElement[];
+  // Only meaningful on an "iframe" element — a distinct object standing in
+  // for its contentWindow, so the message-listener test below can assert
+  // the event.source === iframeEl.contentWindow origin check (see
+  // public/embed.js's message listener) against a real reference, not a
+  // string/shape match.
+  contentWindow: object;
   appendChild(child: FakeElement): void;
   addEventListener(type: string, fn: () => void): void;
   click(): void;
@@ -99,6 +105,7 @@ function createFakeElement(tagName: string): FakeElement {
     dataset: {},
     style: {},
     children: [],
+    contentWindow: {},
     appendChild(child) {
       this.children.push(child);
     },
@@ -132,13 +139,34 @@ function createFakeDocument(options: { hideDefaultButton?: boolean; bookElements
   return { doc, bodyChildren };
 }
 
+// Fake `window` capable of recording `message` listeners and firing them —
+// mirrors FakeElement's own addEventListener/click pairing above, sized for
+// exactly the one event type (message) embed.js listens for on window.
+function createFakeWindow(doc: unknown) {
+  const messageListeners: Array<(event: { data: unknown; source: unknown }) => void> = [];
+  const win: Record<string, unknown> = {
+    document: doc,
+    addEventListener(type: string, fn: (event: { data: unknown; source: unknown }) => void) {
+      if (type === "message") messageListeners.push(fn);
+    },
+    dispatchMessage(data: unknown, source: unknown) {
+      messageListeners.forEach((fn) => fn({ data, source }));
+    },
+  };
+  return win;
+}
+
 function runEmbedModule(doc: unknown) {
   const source = fs.readFileSync(EMBED_JS_PATH, "utf-8");
-  const sandbox: Record<string, unknown> = { window: {}, document: doc, console, URL };
-  (sandbox.window as Record<string, unknown>).document = doc;
+  const win = createFakeWindow(doc) as { Platform?: unknown; dispatchMessage: (data: unknown, source: unknown) => void };
+  const sandbox: Record<string, unknown> = { window: win, document: doc, console, URL };
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox, { filename: "embed.js" });
-  return (sandbox.window as { Platform: { open(): void; close(): void; isOpen(): boolean } }).Platform;
+  const platform = win.Platform as { open(): void; close(): void; isOpen(): boolean };
+  // Merges dispatchMessage onto the returned Platform object so existing
+  // call sites (platform.open()/.close()/.isOpen()) stay unchanged, while
+  // the new message-listener test below can also drive platform.dispatchMessage(...).
+  return Object.assign(platform, { dispatchMessage: win.dispatchMessage });
 }
 
 describe("init() DOM wiring (loaded via vm against the real file)", () => {
@@ -176,6 +204,41 @@ describe("init() DOM wiring (loaded via vm against the real file)", () => {
     expect(platform.isOpen()).toBe(false);
 
     bookB.click();
+    expect(platform.isOpen()).toBe(true);
+  });
+
+  it("closes when the iframe posts a platform-widget close message (the drawer's in-content close button, issue: no close affordance on mobile)", () => {
+    const { doc, bodyChildren } = createFakeDocument({});
+    const platform = runEmbedModule(doc);
+
+    platform.open();
+    expect(platform.isOpen()).toBe(true);
+
+    const drawer = bodyChildren.find((el) => el.id === "platform-widget-drawer")!;
+    const iframeEl = drawer.children.find((c) => c.tagName === "iframe")!;
+
+    platform.dispatchMessage({ source: "platform-widget", type: "close" }, iframeEl.contentWindow);
+    expect(platform.isOpen()).toBe(false);
+  });
+
+  it("ignores a close message whose source isn't the widget's own iframe", () => {
+    const { doc } = createFakeDocument({});
+    const platform = runEmbedModule(doc);
+
+    platform.open();
+    platform.dispatchMessage({ source: "platform-widget", type: "close" }, {});
+    expect(platform.isOpen()).toBe(true);
+  });
+
+  it("ignores a same-source message that isn't the platform-widget close shape", () => {
+    const { doc, bodyChildren } = createFakeDocument({});
+    const platform = runEmbedModule(doc);
+
+    platform.open();
+    const drawer = bodyChildren.find((el) => el.id === "platform-widget-drawer")!;
+    const iframeEl = drawer.children.find((c) => c.tagName === "iframe")!;
+
+    platform.dispatchMessage({ foo: "bar" }, iframeEl.contentWindow);
     expect(platform.isOpen()).toBe(true);
   });
 
