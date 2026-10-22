@@ -6,25 +6,29 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    /* Sage/cream palette + Georgia serif headings (CLAUDE.md Decisions
-       Log — reserved for apps/site, distinct from the admin's neutral
-       theme). Body stays a clean modern sans for contrast against the
-       serif headings, rather than the WordPress site's all-serif look. */
-    --font-heading: Georgia, "Times New Roman", serif;
+    /* Reference design's olive-green/cream palette (ADR-0005, issue #21)
+       — Geist sans for everything including headings, no serif override.
+       --color-ink/--color-teal/--color-teal-dark/--color-mint/
+       --color-cream/--color-line expose the reference's own raw tokens
+       below as Tailwind utilities directly (e.g. `bg-mint`,
+       `hover:bg-teal-dark`) for places that need the exact reference
+       value rather than a semantic shadcn role. --muted/--white aren't
+       re-exposed this way since they'd collide with Tailwind's own
+       `muted`/`white` utility names — they're still available as plain
+       CSS custom properties (`var(--muted)`, `var(--white)`). Note
+       shadcn's own `--color-muted` role (a subtle *background*, used by
+       Button's outline/ghost hover states below) is intentionally wired
+       to `--mint` rather than to the reference's own `--muted` token,
+       since that token is the reference's muted *text* color (used via
+       `--muted-foreground` instead) — same name, two different roles in
+       the two token systems. */
+    --color-ink: var(--ink);
+    --color-teal: var(--teal);
+    --color-teal-dark: var(--teal-dark);
+    --color-mint: var(--mint);
+    --color-cream: var(--cream);
+    --color-line: var(--line);
     --font-sans: 'Geist Variable', sans-serif;
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
     --color-ring: var(--ring);
     --color-input: var(--input);
     --color-border: var(--border);
@@ -32,7 +36,7 @@
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
+    --color-muted: var(--mint);
     --color-secondary-foreground: var(--secondary-foreground);
     --color-secondary: var(--secondary);
     --color-primary-foreground: var(--primary-foreground);
@@ -53,75 +57,42 @@
 }
 
 :root {
-    /* Cream background, dark warm-green ink, sage primary/accents. */
-    --background: oklch(0.98 0.012 85);
-    --foreground: oklch(0.24 0.025 150);
-    --card: oklch(0.995 0.008 85);
-    --card-foreground: oklch(0.24 0.025 150);
-    --popover: oklch(0.995 0.008 85);
-    --popover-foreground: oklch(0.24 0.025 150);
-    --primary: oklch(0.5 0.055 150);
-    --primary-foreground: oklch(0.98 0.012 85);
-    --secondary: oklch(0.93 0.025 95);
-    --secondary-foreground: oklch(0.3 0.03 150);
-    --muted: oklch(0.94 0.02 88);
-    --muted-foreground: oklch(0.47 0.03 145);
-    --accent: oklch(0.89 0.035 135);
-    --accent-foreground: oklch(0.28 0.035 150);
+    /* Reference design's exact token values (ADR-0005, issue #21,
+       replacing the previous sage/cream oklch palette). These are the
+       raw values; the shadcn semantic roles below (background,
+       primary, border, etc. — consumed by Button and every existing
+       `bg-background`/`text-primary`/`border-border` class already in
+       SiteLayout/HomeContent/PricesContent) are wired from them so
+       existing markup repaints without needing every class renamed. */
+    --ink: #303628;
+    --muted: #6d7463;
+    --teal: #6f7d51;
+    --teal-dark: #4f5d39;
+    --mint: #e5ead8;
+    --cream: #f1eee1;
+    --line: #d9ddcc;
+    --white: #fff;
+
+    --background: var(--cream);
+    --foreground: var(--ink);
+    --card: var(--white);
+    --card-foreground: var(--ink);
+    --popover: var(--white);
+    --popover-foreground: var(--ink);
+    --primary: var(--teal);
+    --primary-foreground: var(--white);
+    --secondary: var(--mint);
+    --secondary-foreground: var(--ink);
+    --muted-foreground: var(--muted);
+    --accent: var(--mint);
+    --accent-foreground: var(--ink);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.87 0.025 95);
-    --input: oklch(0.87 0.025 95);
-    --ring: oklch(0.5 0.055 150);
-    --chart-1: oklch(0.6 0.07 150);
-    --chart-2: oklch(0.7 0.05 95);
-    --chart-3: oklch(0.45 0.06 150);
-    --chart-4: oklch(0.8 0.04 90);
-    --chart-5: oklch(0.35 0.05 150);
+    --border: var(--line);
+    --input: var(--line);
+    --ring: var(--teal);
     /* Rounder than shadcn's 0.625rem default — part of the "modernised"
        look against the WordPress original's boxy, sharp-cornered UI. */
     --radius: 1rem;
-    --sidebar: oklch(0.98 0.012 85);
-    --sidebar-foreground: oklch(0.24 0.025 150);
-    --sidebar-primary: oklch(0.5 0.055 150);
-    --sidebar-primary-foreground: oklch(0.98 0.012 85);
-    --sidebar-accent: oklch(0.89 0.035 135);
-    --sidebar-accent-foreground: oklch(0.28 0.035 150);
-    --sidebar-border: oklch(0.87 0.025 95);
-    --sidebar-ring: oklch(0.5 0.055 150);
-}
-
-.dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
