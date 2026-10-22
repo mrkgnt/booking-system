@@ -2,8 +2,11 @@
 import SiteLayout from "@/layouts/SiteLayout.astro";
 import PricesContent from "@/components/PricesContent.astro";
 import { lv } from "@/content/lv";
+import { fetchCatalog } from "@/lib/catalog/fetch";
+
+const catalog = await fetchCatalog(import.meta.env.SUPABASE_URL, import.meta.env.SUPABASE_ANON_KEY, "lv");
 ---
 
 <SiteLayout locale="lv" copy={lv} title={lv.nav.prices}>
-  <PricesContent copy={lv} />
+  <PricesContent copy={lv} catalog={catalog} />
 </SiteLayout>
