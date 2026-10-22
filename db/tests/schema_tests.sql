@@ -495,6 +495,170 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- 18-22. site_sections / site_content (ADR-0005 Site Content CMS). Same
+-- two-tier anon-vs-authenticated pattern as the rest of the public catalog
+-- (10-14 above): developer-owned site_sections and Tenant-editable
+-- site_content are both publicly readable (apps/site reads them directly
+-- via the anon key) but writable only by an active authenticated member.
+-- ---------------------------------------------------------------------------
+
+-- 18. site_sections.(page_slug, section_key) uniqueness
+do $$
+declare
+  v_page_slug text;
+  v_section_key text;
+begin
+  select page_slug, section_key into v_page_slug, v_section_key from site_sections limit 1;
+
+  if v_page_slug is null then
+    insert into test_results (test_name, passed, detail)
+      values ('site_sections (page_slug, section_key) uniqueness enforced', false, 'skipped: no site_sections rows to test against');
+  else
+    begin
+      insert into site_sections (page_slug, section_key, fields) values (v_page_slug, v_section_key, '[]'::jsonb);
+      insert into test_results (test_name, passed, detail)
+        values ('site_sections (page_slug, section_key) uniqueness enforced', false, 'duplicate (page_slug, section_key) insert unexpectedly succeeded');
+    exception when unique_violation then
+      insert into test_results (test_name, passed, detail)
+        values ('site_sections (page_slug, section_key) uniqueness enforced', true, null);
+    end;
+  end if;
+end $$;
+
+-- 19. site_content.(page_slug, locale) uniqueness. Skips cleanly (matching
+-- the existing precedent set by tests 3-6 above) until a downstream ticket's
+-- admin screen actually writes a site_content row — this ticket seeds only
+-- the site_sections schema, not Tenant content values.
+do $$
+declare
+  v_page_slug text;
+  v_locale text;
+begin
+  select page_slug, locale into v_page_slug, v_locale from site_content limit 1;
+
+  if v_page_slug is null then
+    insert into test_results (test_name, passed, detail)
+      values ('site_content (page_slug, locale) uniqueness enforced', false, 'skipped: no site_content rows to test against');
+  else
+    begin
+      insert into site_content (page_slug, locale, content) values (v_page_slug, v_locale, '{}'::jsonb);
+      insert into test_results (test_name, passed, detail)
+        values ('site_content (page_slug, locale) uniqueness enforced', false, 'duplicate (page_slug, locale) insert unexpectedly succeeded');
+    exception when unique_violation then
+      insert into test_results (test_name, passed, detail)
+        values ('site_content (page_slug, locale) uniqueness enforced', true, null);
+    end;
+  end if;
+end $$;
+
+-- 20. anon CAN read site_sections + site_content (public read, matching the
+-- existing catalog two-tier pattern — apps/site reads these directly via
+-- the anon key, same as services/staff/business_hours already do).
+do $$
+declare
+  v_sections int;
+  v_content int;
+begin
+  set local role anon;
+  select count(*) into v_sections from site_sections;
+  select count(*) into v_content from site_content;
+  reset role;
+
+  insert into test_results (test_name, passed, detail)
+    values ('anon can read site_sections and site_content',
+      v_sections > 0 and v_content >= 0,
+      format('site_sections=%s site_content=%s', v_sections, v_content));
+end $$;
+
+-- 21. anon cannot WRITE to site_sections (read-only grant — developer-owned,
+-- no Tenant-facing write path exists for this table at all)
+do $$
+declare
+  v_blocked boolean := false;
+begin
+  begin
+    set local role anon;
+    insert into site_sections (page_slug, section_key, fields) values ('anon-test', 'anon-test', '[]'::jsonb);
+    reset role;
+  exception when insufficient_privilege then
+    reset role;
+    v_blocked := true;
+  end;
+  insert into test_results (test_name, passed, detail)
+    values ('anon blocked from writing to site_sections (SELECT-only grant)', v_blocked,
+      case when v_blocked then null else 'insert unexpectedly succeeded' end);
+end $$;
+
+-- 22. anon cannot WRITE to site_content (read-only grant — writes only
+-- happen through apps/admin's Site Content screen, as an authenticated
+-- staff member)
+do $$
+declare
+  v_blocked boolean := false;
+begin
+  begin
+    set local role anon;
+    insert into site_content (page_slug, locale, content) values ('anon-test', 'en', '{}'::jsonb);
+    reset role;
+  exception when insufficient_privilege then
+    reset role;
+    v_blocked := true;
+  end;
+  insert into test_results (test_name, passed, detail)
+    values ('anon blocked from writing to site_content (SELECT-only grant)', v_blocked,
+      case when v_blocked then null else 'insert unexpectedly succeeded' end);
+end $$;
+
+-- 23. anon CAN read business_profile.address (scoped column grant, issue
+-- #25's "find us" band) but NOT other business_profile columns.
+do $$
+declare
+  v_address_ok boolean := false;
+  v_name_blocked boolean := false;
+begin
+  begin
+    set local role anon;
+    perform address from business_profile;
+    reset role;
+    v_address_ok := true;
+  exception when insufficient_privilege then
+    reset role;
+  end;
+
+  begin
+    set local role anon;
+    perform name from business_profile;
+    reset role;
+  exception when insufficient_privilege then
+    reset role;
+    v_name_blocked := true;
+  end;
+
+  insert into test_results (test_name, passed, detail)
+    values ('anon can read business_profile.address but not other columns',
+      v_address_ok and v_name_blocked,
+      format('address_readable=%s name_blocked=%s', v_address_ok, v_name_blocked));
+end $$;
+
+-- 24. anon cannot WRITE to business_profile (read-only, single column)
+do $$
+declare
+  v_blocked boolean := false;
+begin
+  begin
+    set local role anon;
+    update business_profile set address = 'anon-test';
+    reset role;
+  exception when insufficient_privilege then
+    reset role;
+    v_blocked := true;
+  end;
+  insert into test_results (test_name, passed, detail)
+    values ('anon blocked from writing to business_profile', v_blocked,
+      case when v_blocked then null else 'update unexpectedly succeeded' end);
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Report
 -- ---------------------------------------------------------------------------
 select test_name, passed, detail from test_results order by seq;

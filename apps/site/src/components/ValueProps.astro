@@ -1,0 +1,28 @@
+---
+import { CheckIcon } from "lucide-react";
+
+// Renders the `value_props` Site Content field (one textarea, one item per
+// line, parsed by the caller via parseLines — see src/lib/site-content.ts)
+// as a checklist (issue #25). Self-contained: takes already-resolved
+// strings as a prop so it has no opinion on where they came from, and
+// composes cleanly alongside the sibling hero/about/stats/testimonial/team
+// sections (#22/#23) being built concurrently on this same page.
+interface Props {
+  items: string[];
+}
+
+const { items } = Astro.props;
+---
+
+{items.length > 0 && (
+  <section class="mx-auto max-w-5xl px-4 sm:px-6 py-16">
+    <ul class="grid gap-4 sm:grid-cols-2">
+      {items.map((item) => (
+        <li class="flex items-start gap-3 rounded-2xl border border-border/70 bg-card p-4">
+          <CheckIcon className="mt-0.5 size-5 shrink-0 text-primary" />
+          <span class="text-foreground/90">{item}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+)}

@@ -1,82 +1,57 @@
 ---
 import { Button } from "@/components/ui/button";
-import type { SiteCopy } from "@/content/types";
+import FindUs from "@/components/FindUs.astro";
+import QuickContact from "@/components/QuickContact.astro";
+import ValueProps from "@/components/ValueProps.astro";
+import Hero from "@/components/sections/Hero.astro";
+import About from "@/components/sections/About.astro";
+import Team from "@/components/Team.astro";
+import Gallery from "@/components/Gallery.astro";
+import type { Locale, SiteCopy } from "@/content/types";
+import { getBusinessAddress, getFieldValueByKey, getFirstFieldValueByType, getSiteContent, parseLines } from "@/lib/site-content";
 
 interface Props {
   copy: SiteCopy;
+  locale: Locale;
 }
 
-const { copy } = Astro.props;
+const { copy, locale } = Astro.props;
 
-const photoStrip = [
-  "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__11-min-2048x1365.jpg",
-  "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__24-min-2048x1365.jpg",
-  "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__6-min-2048x1365.jpg",
-];
+const restConfig = { supabaseUrl: import.meta.env.SUPABASE_URL, anonKey: import.meta.env.SUPABASE_ANON_KEY };
+
+// Site Content fetch for this ticket's 3 sections (issue #25: value-props
+// checklist, quick-contact card row, find-us band). Hero/About (#22) and
+// Team/Gallery (#23) each fetch their own section independently via
+// getSectionContent — this one pulls the whole-page bundle instead
+// (getSiteContent) since value_props/quick_contact need lookups by field
+// type/key across sections, not just one section's resolved values.
+const siteContent = await getSiteContent(restConfig, "home", locale);
+const valuePropsItems = parseLines(getFirstFieldValueByType(siteContent, "value_props", "textarea"));
+const whatsappUrl = getFieldValueByKey(siteContent, "quick_contact", "whatsapp_url");
+const telegramUrl = getFieldValueByKey(siteContent, "quick_contact", "telegram_url");
+const address = await getBusinessAddress(restConfig);
 ---
 
-<section class="relative overflow-hidden">
-  <div class="absolute inset-0">
-    <img
-      src="https://dentdi.lv/wp-content/uploads/2023/10/Dent_Di__71-min-1-2048x1365-1.jpg"
-      alt=""
-      class="h-full w-full object-cover"
-    />
-    <div class="absolute inset-0 bg-background/85"></div>
-  </div>
-  <div class="relative mx-auto max-w-5xl px-4 sm:px-6 py-20 sm:py-28">
-    <p class="text-sm uppercase tracking-wide text-primary font-medium mb-4">{copy.hero.since}</p>
-    <h1 class="font-heading text-4xl sm:text-5xl leading-tight text-foreground max-w-2xl">
-      {copy.hero.title}
-    </h1>
-    <p class="mt-5 text-lg text-muted-foreground max-w-xl">{copy.hero.subtitle}</p>
-    <div class="mt-8 flex flex-wrap items-center gap-4">
-      <Button data-platform-book size="lg" className="h-11 px-6 text-base rounded-full">
-        {copy.hero.cta}
-      </Button>
-      <a
-        href={`tel:${copy.contact.phone.replace(/\s+/g, "")}`}
-        class="text-foreground/80 hover:text-primary font-medium underline-offset-4 hover:underline"
-      >
-        {copy.hero.callUs} {copy.contact.phone}
-      </a>
-    </div>
-  </div>
-</section>
+<!-- SECTION: hero (ticket #22, Site Content CMS, ADR-0005) -->
+<Hero locale={locale} />
 
-<section class="mx-auto max-w-5xl px-4 sm:px-6 py-16 grid gap-10 sm:grid-cols-[1.2fr_0.8fr]">
-  <div>
-    <h2 class="font-heading text-2xl text-primary mb-4">{copy.about.heading}</h2>
-    {copy.about.paragraphs.map((p) => (
-      <p class="text-foreground/90 leading-relaxed mb-4">{p}</p>
-    ))}
-    <blockquote class="border-l-2 border-primary/40 pl-4 italic text-muted-foreground mt-6">
-      {copy.about.quote.map((line) => <p class="mb-2">{line}</p>)}
-      <p class="font-heading text-foreground not-italic mt-2">— {copy.about.doctorName}</p>
-    </blockquote>
-  </div>
-  <div class="grid grid-cols-3 gap-2 content-start">
-    {photoStrip.map((src) => (
-      <img src={src} alt="" class="aspect-square w-full object-cover rounded-xl" loading="lazy" />
-    ))}
-  </div>
-</section>
+<!-- SECTION: about (ticket #22, Site Content CMS, ADR-0005) -->
+<About locale={locale} />
 
-<section class="mx-auto max-w-5xl px-4 sm:px-6 py-16">
-  <div class="grid gap-6 sm:grid-cols-2">
-    {copy.team.map((member) => (
-      <div class="rounded-2xl border border-border/70 bg-card p-6">
-        <p class="font-heading text-xl text-foreground">{member.name}</p>
-        <p class="text-primary font-medium mt-0.5">{member.role}</p>
-        <p class="text-sm text-muted-foreground mt-2">{member.credential}</p>
-      </div>
-    ))}
-  </div>
-</section>
+{/* Team + Gallery (ticket #23) — reads apps/site/src/lib/team.ts +
+    apps/site/src/lib/site-content.ts directly (staff table / gallery
+    Site Content field), not `copy`. Self-contained components; this is
+    the only block in this file ticket #23 touches — see Team.astro /
+    Gallery.astro for the actual render logic. */}
+<Team />
+<Gallery />
+
+<!-- SECTION: value_props (ticket #25) -->
+<ValueProps items={valuePropsItems} />
 
 <section class="mx-auto max-w-5xl px-4 sm:px-6 py-16 grid gap-10 sm:grid-cols-2">
   <div>
-    <h2 class="font-heading text-2xl text-primary mb-4">{copy.hours.heading}</h2>
+    <h2 class="text-2xl font-semibold text-primary mb-4">{copy.hours.heading}</h2>
     <ul class="divide-y divide-border/70 rounded-2xl border border-border/70 bg-card overflow-hidden">
       {copy.hours.rows.map((row) => (
         <li class="flex items-center justify-between px-4 py-2.5 text-sm">
@@ -87,7 +62,7 @@ const photoStrip = [
     </ul>
   </div>
   <div id="contact">
-    <h2 class="font-heading text-2xl text-primary mb-4">{copy.contact.heading}</h2>
+    <h2 class="text-2xl font-semibold text-primary mb-4">{copy.contact.heading}</h2>
     <div class="rounded-2xl border border-border/70 bg-card p-6 space-y-3 text-sm">
       <p class="text-foreground/90">
         {copy.contact.addressLines.map((line) => <>{line}<br /></>)}
@@ -102,9 +77,13 @@ const photoStrip = [
           {copy.contact.email}
         </a>
       </p>
+      <QuickContact whatsappUrl={whatsappUrl} telegramUrl={telegramUrl} />
       <Button data-platform-book variant="outline" className="mt-2">
         {copy.nav.bookNow}
       </Button>
     </div>
   </div>
 </section>
+
+<!-- SECTION: find_us (ticket #25) -->
+<FindUs address={address} heading={copy.findUs.heading} mapsLabel={copy.findUs.mapsLabel} wazeLabel={copy.findUs.wazeLabel} />

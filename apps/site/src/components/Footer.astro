@@ -1,0 +1,45 @@
+---
+import type { SiteCopy } from "@/content/types";
+
+// Site footer (issue #25): copyright line + a "back to top" link, extracted
+// out of SiteLayout.astro into its own self-contained component. Keeps the
+// same `copy`-prop convention HomeContent/PricesContent already use rather
+// than inventing a narrower prop shape just for this component.
+interface Props {
+  copy: SiteCopy;
+}
+
+const { copy } = Astro.props;
+---
+
+<footer class="border-t border-border/70 bg-secondary/40">
+  <div class="mx-auto max-w-5xl px-4 sm:px-6 py-10 grid gap-8 sm:grid-cols-3 text-sm">
+    <div>
+      <p class="text-lg font-semibold text-primary mb-2">Dent Di</p>
+      <p class="text-muted-foreground">{copy.hero.since}</p>
+    </div>
+    <div>
+      <p class="font-medium mb-2">{copy.contact.heading}</p>
+      <p class="text-muted-foreground">
+        {copy.contact.addressLines.map((line) => <>{line}<br /></>)}
+      </p>
+      <p class="text-muted-foreground mt-1">
+        <a href={`tel:${copy.contact.phone.replace(/\s+/g, "")}`} class="hover:text-primary">{copy.contact.phone}</a>
+        {" · "}
+        <a href={`mailto:${copy.contact.email}`} class="hover:text-primary">{copy.contact.email}</a>
+      </p>
+    </div>
+    <div>
+      <p class="font-medium mb-2">{copy.hours.heading}</p>
+      <ul class="text-muted-foreground space-y-0.5">
+        {copy.hours.rows.slice(0, 2).map((row) => (
+          <li>{row.day}: {row.hours}</li>
+        ))}
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-border/70 py-4 flex flex-col items-center gap-2 text-center text-xs text-muted-foreground sm:flex-row sm:justify-between sm:px-6 max-w-5xl mx-auto">
+    <p>© {new Date().getFullYear()} Dent Di. {copy.footer.rights}</p>
+    <a href="#top" class="font-medium text-primary hover:underline">{copy.footer.backToTop} ↑</a>
+  </div>
+</footer>

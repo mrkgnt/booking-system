@@ -1,7 +1,10 @@
 ---
 import "../styles/global.css";
 import { Button } from "@/components/ui/button";
+import Footer from "@/components/Footer.astro";
+import WhatsAppBubble from "@/components/WhatsAppBubble.astro";
 import type { Locale, SiteCopy } from "@/content/types";
+import { getFieldValueByKey, getSiteContent } from "@/lib/site-content";
 import { getRelativeLocaleUrl } from "astro:i18n";
 
 interface Props {
@@ -17,6 +20,20 @@ const otherLocales = (["lv", "ru", "en"] as const).filter((l) => l !== locale);
 
 const widgetEmbedUrl = import.meta.env.WIDGET_EMBED_URL ?? "http://localhost:8082/embed.js";
 const tenantSlug = import.meta.env.TENANT_SLUG ?? "dentdi";
+
+// The floating WhatsApp bubble (issue #25) is sitewide chrome, not
+// home-page content, so it's fetched here rather than in HomeContent.astro
+// — both read quick_contact.whatsapp_url (always under the "home" page_slug,
+// where issue #28 seeded it) so there's one source of truth for the value
+// even though there are two independent fetches of it (one here for the
+// bubble, one in HomeContent for the contact-card row); acceptable, since
+// nothing about correctness depends on sharing the fetch itself.
+const siteContent = await getSiteContent(
+  { supabaseUrl: import.meta.env.SUPABASE_URL, anonKey: import.meta.env.SUPABASE_ANON_KEY },
+  "home",
+  locale,
+);
+const whatsappUrl = getFieldValueByKey(siteContent, "quick_contact", "whatsapp_url");
 ---
 
 <html lang={locale}>
@@ -29,10 +46,10 @@ const tenantSlug = import.meta.env.TENANT_SLUG ?? "dentdi";
       content="Dent Di — stomatoloģijas klīnika Rīgā kopš 2003. gada. Dental clinic in Riga since 2003."
     />
   </head>
-  <body class="min-h-screen flex flex-col">
+  <body id="top" class="min-h-screen flex flex-col">
     <header class="border-b border-border/70 bg-background/95 backdrop-blur sticky top-0 z-40">
       <div class="mx-auto max-w-5xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-        <a href={getRelativeLocaleUrl(locale, "/")} class="font-heading text-xl tracking-tight text-primary">
+        <a href={getRelativeLocaleUrl(locale, "/")} class="text-xl font-semibold tracking-tight text-primary">
           Dent Di
         </a>
         <nav class="hidden sm:flex items-center gap-6 text-sm text-foreground/80">
@@ -51,7 +68,7 @@ const tenantSlug = import.meta.env.TENANT_SLUG ?? "dentdi";
               </a>
             ))}
           </div>
-          <Button data-platform-book size="sm">{copy.nav.bookNow}</Button>
+          <Button data-platform-book size="sm" className="hover:bg-teal-dark">{copy.nav.bookNow}</Button>
         </div>
       </div>
     </header>
@@ -60,36 +77,8 @@ const tenantSlug = import.meta.env.TENANT_SLUG ?? "dentdi";
       <slot />
     </main>
 
-    <footer class="border-t border-border/70 bg-secondary/40">
-      <div class="mx-auto max-w-5xl px-4 sm:px-6 py-10 grid gap-8 sm:grid-cols-3 text-sm">
-        <div>
-          <p class="font-heading text-lg text-primary mb-2">Dent Di</p>
-          <p class="text-muted-foreground">{copy.hero.since}</p>
-        </div>
-        <div>
-          <p class="font-medium mb-2">{copy.contact.heading}</p>
-          <p class="text-muted-foreground">
-            {copy.contact.addressLines.map((line) => <>{line}<br /></>)}
-          </p>
-          <p class="text-muted-foreground mt-1">
-            <a href={`tel:${copy.contact.phone.replace(/\s+/g, "")}`} class="hover:text-primary">{copy.contact.phone}</a>
-            {" · "}
-            <a href={`mailto:${copy.contact.email}`} class="hover:text-primary">{copy.contact.email}</a>
-          </p>
-        </div>
-        <div>
-          <p class="font-medium mb-2">{copy.hours.heading}</p>
-          <ul class="text-muted-foreground space-y-0.5">
-            {copy.hours.rows.slice(0, 2).map((row) => (
-              <li>{row.day}: {row.hours}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      <div class="border-t border-border/70 py-4 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Dent Di. {copy.footer.rights}
-      </div>
-    </footer>
+    <Footer copy={copy} />
+    <WhatsAppBubble whatsappUrl={whatsappUrl} />
 
     <!--
       Embeds the Booking Widget (apps/widget, ADR-0004) rather than

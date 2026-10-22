@@ -1,0 +1,43 @@
+---
+import { MessageCircleIcon, SendIcon } from "lucide-react";
+
+// Contact-card row for the `quick_contact` section's whatsapp_url/
+// telegram_url fields (both `localized: false` — issue #25). Reads the SAME
+// resolved values WhatsAppBubble.astro renders as the floating bubble; the
+// caller fetches Site Content once and passes the result to both, so
+// there's one source of truth, not two separately-entered values. A blank
+// field hides its row entirely rather than rendering a broken/empty link.
+interface Props {
+  whatsappUrl: string;
+  telegramUrl: string;
+}
+
+const { whatsappUrl, telegramUrl } = Astro.props;
+---
+
+{whatsappUrl && (
+  <p>
+    <a
+      href={whatsappUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      class="inline-flex items-center gap-2 text-primary hover:underline"
+    >
+      <MessageCircleIcon className="size-4" />
+      WhatsApp
+    </a>
+  </p>
+)}
+{telegramUrl && (
+  <p>
+    <a
+      href={telegramUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      class="inline-flex items-center gap-2 text-primary hover:underline"
+    >
+      <SendIcon className="size-4" />
+      Telegram
+    </a>
+  </p>
+)}
