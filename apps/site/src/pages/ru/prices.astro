@@ -2,8 +2,11 @@
 import SiteLayout from "@/layouts/SiteLayout.astro";
 import PricesContent from "@/components/PricesContent.astro";
 import { ru } from "@/content/ru";
+import { fetchCatalog } from "@/lib/catalog/fetch";
+
+const catalog = await fetchCatalog(import.meta.env.SUPABASE_URL, import.meta.env.SUPABASE_ANON_KEY, "ru");
 ---
 
 <SiteLayout locale="ru" copy={ru} title={ru.nav.prices}>
-  <PricesContent copy={ru} />
+  <PricesContent copy={ru} catalog={catalog} />
 </SiteLayout>

@@ -4,9 +4,9 @@ import { defineConfig } from "vitest/config";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Mirrors apps/widget/vitest.config.ts exactly — same "@" -> ./src alias
-// as components.json/tsconfig.json so tests import the same files the app
-// does, no parallel relative-path-only test doubles.
+// Mirrors apps/widget/vitest.config.ts: same "@/*" -> "./src/*" alias as
+// components.json, same node environment (no DOM needed for the pure
+// logic this app's test suite covers), same e2e/ exclusion.
 export default defineConfig({
   resolve: { alias: { "@": path.resolve(dirname, "./src") } },
   test: {
