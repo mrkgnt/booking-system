@@ -368,7 +368,7 @@ detail: see `PROJECT_CONTEXT.md`.
 | Area | Decision |
 |---|---|
 | Locales at launch | LV + RU + EN |
-| Visual design | Sage/cream palette, Georgia serif headings |
+| Visual design | **Superseded (2026-10-22, grilling session, ADR-0005).** Was: sage/cream palette, Georgia serif headings. Now: pinned to a reference design's actual tokens — Geist sans throughout (headings included, no serif) — `--ink:#303628`, `--muted:#6d7463`, `--teal:#6f7d51` (an olive-green despite the var name), `--teal-dark:#4f5d39`, `--mint:#e5ead8`, `--cream:#f1eee1`, `--line:#d9ddcc`, `--white:#fff`. Sage/cream spirit kept; exact values and the serif-headings call both revised. |
 | Payment at booking | None — pay at clinic |
 | Admin chat widget | Rule-based/scripted FAQ bot, not AI/LLM |
 | Notification channels | Email + SMS |
@@ -468,6 +468,16 @@ detail: see `PROJECT_CONTEXT.md`.
       `TENANT_SLUG`. Deferred, not done: full price-list fidelity, a
       cases/before-after gallery page, favicon/OG image, SEO redirect
       map from the old WordPress URLs (already an Open Item below).
+      **Update (2026-10-22): committed to `main`.** **Superseded by
+      ADR-0005**, via a full grilling session: the Georgia-serif
+      tokens, the static output mode, and the curated price-list
+      subset above are all being replaced, not kept — see ADR-0005 and
+      the revised "Visual design" Decisions Log row. This build-stage
+      entry is left as a historical record of the first pass, not a
+      description of the current design; a fresh build-stage entry
+      will record the replacement once it's actually built (interview
+      only so far — see `GLOSSARY.md`'s new **Section**/**Site
+      Content** terms for the vocabulary that came out of it).
 
 ## Open / Non-Blocking Items
 

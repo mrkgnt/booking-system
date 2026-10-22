@@ -56,14 +56,42 @@ _Avoid_: "the site", "the embed" (both ambiguous with Site build below).
 
 **Site build**:
 An optional, separately-priced add-on: a full custom marketing site
-(`apps/site`) built for a Tenant on their own domain, deliberately
-minimal in scope (a design showcase more than a full CMS), which embeds
-the same Booking Widget as any other host site rather than its own
+(`apps/site`) built for a Tenant on their own domain, which embeds the
+same Booking Widget as any other host site rather than its own
 booking-flow code (ADR-0004). Not every Tenant buys this — Dent Di does,
-since their WordPress site is being decommissioned.
+since their WordPress site is being decommissioned. Page layout,
+component choice, and visual theme are code-defined by the developer;
+the Tenant edits their own Site Content (below) through `apps/admin`
+without needing a developer or a redeploy (ADR-0005).
 _Avoid_: conflating with the Booking Widget — a Tenant can have a Site
 build without needing one, or vice versa (a Tenant with no Site build
 still gets the Booking Widget as the baseline).
+
+**Section**:
+A named, code-defined content unit within a Site build page (e.g. the
+hero, the about band, the stats row) — one Astro component plus a
+matching schema row (`site_sections`) declaring the inputs it needs
+(field key, label, type, whether it's required, whether it varies by
+locale). Adding a new Section is a code change (developer writes the
+component + its schema row); a Section's definition is never
+Tenant-editable. See **Site Content** below for the values that
+populate it (ADR-0005).
+_Avoid_: "block", "component" alone (too generic — a Section specifically
+pairs a component with a declared field schema).
+
+**Site Content**:
+The actual per-locale text/image values a Tenant's staff enter to
+populate a Site build's Sections — distinct from a Section's
+*definition* (code/schema, developer-owned). Edited through a dedicated
+`apps/admin` screen, open to the same staff who can already use every
+other `/admin/*` screen (no separate access tier). Deliberately scoped
+to marketing copy with no existing schema home (hero/about/stats/
+testimonial/value-props/gallery/social-links) — service, staff, hours,
+and business-profile data stay owned by their existing tables and are
+read from there, not duplicated into Site Content (ADR-0005).
+_Avoid_: "CMS content" alone (this repo already has config/content
+elsewhere — services, staff, hours — so "Site Content" names this one
+specific, narrower thing).
 
 **Booking draft**:
 A customer's in-progress booking-flow state (selected service, staff,
