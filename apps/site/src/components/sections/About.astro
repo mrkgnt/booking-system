@@ -1,0 +1,49 @@
+---
+// About band (issue #22, ADR-0005) — heading + body paragraphs from live
+// Site Content. `paragraphs` is a plain textarea value (ADR-0005: no new
+// repeatable-field type) — splitIntoParagraphs documents the exact split
+// rule (prefer blank-line-delimited paragraphs, fall back to one
+// paragraph per line) and is unit-tested in src/lib/site-content.test.ts.
+import { getSectionContent, splitIntoParagraphs, type SectionValues } from "@/lib/site-content";
+import type { Locale } from "@/content/types";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const canonicalLocale = (import.meta.env.SITE_CONTENT_CANONICAL_LOCALE || "lv") as Locale;
+
+const values: SectionValues = await getSectionContent(
+  { supabaseUrl: import.meta.env.SUPABASE_URL, anonKey: import.meta.env.SUPABASE_ANON_KEY },
+  "home",
+  "about",
+  locale,
+  canonicalLocale,
+);
+
+const paragraphs = splitIntoParagraphs(values.paragraphs);
+
+// Kept from the previous hardcoded build — real clinic photos, not Site
+// Content (no `image` field on this Section; a photo-strip field could
+// be added later the same way the gallery Section already has one).
+const photoStrip = [
+  "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__11-min-2048x1365.jpg",
+  "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__24-min-2048x1365.jpg",
+  "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__6-min-2048x1365.jpg",
+];
+---
+
+<section class="mx-auto max-w-5xl px-4 sm:px-6 py-16 grid gap-10 sm:grid-cols-[1.2fr_0.8fr]">
+  <div>
+    {values.heading && <h2 class="text-2xl font-semibold text-primary mb-4">{values.heading}</h2>}
+    {paragraphs.map((p) => (
+      <p class="text-foreground/90 leading-relaxed mb-4">{p}</p>
+    ))}
+  </div>
+  <div class="grid grid-cols-3 gap-2 content-start">
+    {photoStrip.map((src) => (
+      <img src={src} alt="" class="aspect-square w-full object-cover rounded-xl" loading="lazy" />
+    ))}
+  </div>
+</section>

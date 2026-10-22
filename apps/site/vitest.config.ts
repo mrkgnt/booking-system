@@ -4,10 +4,11 @@ import { defineConfig } from "vitest/config";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Mirrors apps/widget/vitest.config.ts — first vitest suite for apps/site
-// (issue #18/#25: this app had no test infra before the Site Content CMS
-// build). Alias matches components.json's "@/*" -> "./src/*" so tests can
-// import the same lib files the app itself does.
+// Mirrors apps/widget/vitest.config.ts: same "@/*" -> "./src/*" alias as
+// components.json/tsconfig.json, same node environment (no DOM needed for
+// the pure logic this app's test suite covers), same e2e/ exclusion.
+// First vitest suite for apps/site (issue #18: this app had no test infra
+// before the Site Content CMS build).
 export default defineConfig({
   resolve: { alias: { "@": path.resolve(dirname, "./src") } },
   test: {

@@ -1,0 +1,50 @@
+---
+import { getSupabaseAnonClient } from "@/lib/supabase";
+import { fetchTeam } from "@/lib/team";
+
+// Self-contained on purpose (ticket #23): no props, no dependency on
+// HomeContent's `copy` prop or apps/site/src/content/*.ts — reads the
+// active locale straight off Astro's own i18n routing (astro.config.mjs's
+// i18n.defaultLocale is "lv") so this component can be dropped into
+// HomeContent with a single swap, without plumbing new props through
+// index.astro/en/index.astro/ru/index.astro, which sibling tickets #22/#25
+// are concurrently editing.
+const DEFAULT_LOCALE = "lv";
+const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
+
+const HEADINGS: Record<string, string> = {
+  lv: "Mūsu komanda",
+  ru: "Наша команда",
+  en: "Our Team",
+};
+const heading = HEADINGS[locale] ?? HEADINGS[DEFAULT_LOCALE];
+
+const supabase = getSupabaseAnonClient();
+const team = await fetchTeam(supabase, locale, DEFAULT_LOCALE);
+---
+
+{
+  team.length > 0 && (
+    <section class="mx-auto max-w-5xl px-4 sm:px-6 py-16">
+      <h2 class="text-2xl font-semibold text-primary mb-8">{heading}</h2>
+      <div class="grid gap-6 sm:grid-cols-2">
+        {team.map((member) => (
+          <div class="rounded-2xl border border-border/70 bg-card p-6 flex gap-4 items-start">
+            {member.photoUrl && (
+              <img
+                src={member.photoUrl}
+                alt={member.name}
+                class="h-20 w-20 rounded-full object-cover shrink-0"
+                loading="lazy"
+              />
+            )}
+            <div>
+              <p class="text-xl font-semibold text-foreground">{member.name}</p>
+              {member.bio && <p class="text-primary font-medium mt-0.5">{member.bio}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}

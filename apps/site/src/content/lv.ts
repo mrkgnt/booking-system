@@ -46,57 +46,13 @@ export const lv: SiteCopy = {
   pricesPage: {
     title: "Cenrādis",
     intro:
-      "Zemāk apskatāmi mūsu populārākie pakalpojumi ar cenām. Pilns cenrādis pieejams klīnikā konsultācijas laikā.",
-    categories: [
-      {
-        name: "Konsultācijas",
-        items: [
-          { label: "Pirmreizējā konsultācija (apskate, RTG, ārstēšanas plāns)", price: "64,00 €" },
-          { label: "Atkārtota konsultācija", price: "25,00 €" },
-          { label: "Ārstēšanas plāna sastādīšana", price: "50,00 €" },
-        ],
-      },
-      {
-        name: "Mutes dobuma higiēna",
-        items: [
-          { label: "Pilna mutes dobuma higiēna ar instruktāžu", price: "70,00 €" },
-          { label: "Mīksta aplikuma noņemšana ar pulēšanu (visiem zobiem)", price: "40,00 €" },
-          { label: "Zoba pārklāšana ar emalju hermetizējošo šķidrumu (vienam zobam)", price: "8,00 €" },
-        ],
-      },
-      {
-        name: "Terapija",
-        items: [
-          { label: "Plombēšana ar kompozītmateriālu (vienas virsmas apjomā)", price: "90,00 €" },
-          { label: "Plombēšana ar kompozītmateriālu (vairāk par trim virsmām)", price: "195,00 €" },
-          { label: "Kanāla apstrāde (viens kanāls)", price: "88,00 €" },
-        ],
-      },
-      {
-        name: "Protezēšana",
-        items: [
-          { label: "Cirkonija kronis (full)", price: "650,00 €" },
-          { label: "Porcelāna kronis (E.MAX)", price: "520,00 €" },
-          { label: "Totāla izņemamā protēze", price: "no 800,00 €" },
-        ],
-      },
-      {
-        name: "Mutes ķirurģija",
-        items: [
-          { label: "Viensakņu zoba ekstrakcija", price: "120,00 €" },
-          { label: "Viena implanta ievadīšana (Straumann)", price: "800,00 €" },
-          { label: "Kaula transplantācija", price: "no 800,00 €" },
-        ],
-      },
-      {
-        name: "Ortodontija",
-        items: [
-          { label: "Zobu taisnošana ar ORDOLINE kapēm (Easy)", price: "1490,00 €" },
-          { label: "Zobu taisnošana ar ORDOLINE kapēm (Complex)", price: "3400,00 €" },
-          { label: "Zobu regulācijas ortodontiska plate", price: "no 200,00 €" },
-        ],
-      },
-    ],
+      "Zemāk apskatāmi visi mūsu pakalpojumi ar cenām. Izmantojiet kategoriju filtrus vai meklēšanu, lai ātri atrastu nepieciešamo.",
+    searchPlaceholder: "Meklēt pakalpojumu...",
+    allCategoriesLabel: "Visi",
+    noResultsLabel: "Nav atrasts neviens pakalpojums.",
+    unavailableLabel: "Cenrādis šobrīd nav pieejams. Lūdzu, apmeklējiet vēlāk.",
+    fromPricePrefix: "no",
+    upToPricePrefix: "līdz",
     note: "Precīzas izmaksas ārstēšanas plānam tiek noteiktas pēc individuālas konsultācijas.",
   },
   footer: { rights: "Visas tiesības aizsargātas.", backToTop: "Uz augšu" },

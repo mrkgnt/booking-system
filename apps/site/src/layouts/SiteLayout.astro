@@ -28,7 +28,11 @@ const tenantSlug = import.meta.env.TENANT_SLUG ?? "dentdi";
 // even though there are two independent fetches of it (one here for the
 // bubble, one in HomeContent for the contact-card row); acceptable, since
 // nothing about correctness depends on sharing the fetch itself.
-const siteContent = await getSiteContent("home", locale);
+const siteContent = await getSiteContent(
+  { supabaseUrl: import.meta.env.SUPABASE_URL, anonKey: import.meta.env.SUPABASE_ANON_KEY },
+  "home",
+  locale,
+);
 const whatsappUrl = getFieldValueByKey(siteContent, "quick_contact", "whatsapp_url");
 ---
 

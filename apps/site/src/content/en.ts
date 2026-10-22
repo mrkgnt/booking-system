@@ -45,57 +45,13 @@ export const en: SiteCopy = {
   },
   pricesPage: {
     title: "Price List",
-    intro: "Below are our most common services and prices. The full price list is available at the clinic during a consultation.",
-    categories: [
-      {
-        name: "Consultations",
-        items: [
-          { label: "Initial consultation (examination, X-ray, treatment plan)", price: "€64.00" },
-          { label: "Follow-up consultation", price: "€25.00" },
-          { label: "Drawing up a treatment plan", price: "€50.00" },
-        ],
-      },
-      {
-        name: "Hygiene",
-        items: [
-          { label: "Complete oral hygiene with instruction", price: "€70.00" },
-          { label: "Removal of soft plaque and polishing (all teeth)", price: "€40.00" },
-          { label: "Fissure sealant coating (one tooth)", price: "€8.00" },
-        ],
-      },
-      {
-        name: "Therapy",
-        items: [
-          { label: "Composite filling (one surface)", price: "€90.00" },
-          { label: "Composite filling (more than three surfaces)", price: "€195.00" },
-          { label: "Root canal treatment (single canal)", price: "€88.00" },
-        ],
-      },
-      {
-        name: "Prosthetics",
-        items: [
-          { label: "Full zirconia crown", price: "€650.00" },
-          { label: "E.MAX ceramic crown", price: "€520.00" },
-          { label: "Complete denture", price: "from €800.00" },
-        ],
-      },
-      {
-        name: "Dental surgery",
-        items: [
-          { label: "Single-root tooth extraction", price: "€120.00" },
-          { label: "Single implant placement (Straumann)", price: "€800.00" },
-          { label: "Bone transplantation", price: "from €800.00" },
-        ],
-      },
-      {
-        name: "Orthodontics",
-        items: [
-          { label: "Ordoline aligners (Easy)", price: "€1,490.00" },
-          { label: "Ordoline aligners (Complex)", price: "€3,400.00" },
-          { label: "Orthodontic retainer plate", price: "from €200.00" },
-        ],
-      },
-    ],
+    intro: "Below are all of our services and prices. Use the category filters or search to quickly find what you need.",
+    searchPlaceholder: "Search services...",
+    allCategoriesLabel: "All",
+    noResultsLabel: "No services found.",
+    unavailableLabel: "The price list is temporarily unavailable. Please check back later.",
+    fromPricePrefix: "from",
+    upToPricePrefix: "up to",
     note: "Exact treatment-plan pricing is confirmed after an individual consultation.",
   },
   footer: { rights: "All rights reserved.", backToTop: "Back to top" },
