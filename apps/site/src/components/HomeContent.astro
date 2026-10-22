@@ -1,68 +1,28 @@
 ---
 import { Button } from "@/components/ui/button";
+import type { Locale, SiteCopy } from "@/content/types";
+import Hero from "@/components/sections/Hero.astro";
+import About from "@/components/sections/About.astro";
 import Team from "@/components/Team.astro";
 import Gallery from "@/components/Gallery.astro";
-import type { SiteCopy } from "@/content/types";
 
 interface Props {
   copy: SiteCopy;
+  locale: Locale;
 }
 
-const { copy } = Astro.props;
-
-const photoStrip = [
-  "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__11-min-2048x1365.jpg",
-  "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__24-min-2048x1365.jpg",
-  "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__6-min-2048x1365.jpg",
-];
+const { copy, locale } = Astro.props;
 ---
 
-<section class="relative overflow-hidden">
-  <div class="absolute inset-0">
-    <img
-      src="https://dentdi.lv/wp-content/uploads/2023/10/Dent_Di__71-min-1-2048x1365-1.jpg"
-      alt=""
-      class="h-full w-full object-cover"
-    />
-    <div class="absolute inset-0 bg-background/85"></div>
-  </div>
-  <div class="relative mx-auto max-w-5xl px-4 sm:px-6 py-20 sm:py-28">
-    <p class="text-sm uppercase tracking-wide text-primary font-medium mb-4">{copy.hero.since}</p>
-    <h1 class="text-4xl sm:text-5xl font-semibold leading-tight text-foreground max-w-2xl">
-      {copy.hero.title}
-    </h1>
-    <p class="mt-5 text-lg text-muted-foreground max-w-xl">{copy.hero.subtitle}</p>
-    <div class="mt-8 flex flex-wrap items-center gap-4">
-      <Button data-platform-book size="lg" className="h-11 px-6 text-base rounded-full hover:bg-teal-dark">
-        {copy.hero.cta}
-      </Button>
-      <a
-        href={`tel:${copy.contact.phone.replace(/\s+/g, "")}`}
-        class="text-foreground/80 hover:text-primary font-medium underline-offset-4 hover:underline"
-      >
-        {copy.hero.callUs} {copy.contact.phone}
-      </a>
-    </div>
-  </div>
-</section>
+<!-- SECTION: hero (ticket #22, Site Content CMS, ADR-0005) -->
+<Hero locale={locale} />
 
-<section class="mx-auto max-w-5xl px-4 sm:px-6 py-16 grid gap-10 sm:grid-cols-[1.2fr_0.8fr]">
-  <div>
-    <h2 class="text-2xl font-semibold text-primary mb-4">{copy.about.heading}</h2>
-    {copy.about.paragraphs.map((p) => (
-      <p class="text-foreground/90 leading-relaxed mb-4">{p}</p>
-    ))}
-    <blockquote class="border-l-2 border-primary/40 pl-4 italic text-muted-foreground mt-6">
-      {copy.about.quote.map((line) => <p class="mb-2">{line}</p>)}
-      <p class="font-semibold text-foreground not-italic mt-2">— {copy.about.doctorName}</p>
-    </blockquote>
-  </div>
-  <div class="grid grid-cols-3 gap-2 content-start">
-    {photoStrip.map((src) => (
-      <img src={src} alt="" class="aspect-square w-full object-cover rounded-xl" loading="lazy" />
-    ))}
-  </div>
-</section>
+<!-- SECTION: about (ticket #22, Site Content CMS, ADR-0005) -->
+<About locale={locale} />
+
+<!-- SECTION: value_props/contact/find_us/footer (ticket #25) land below as
+     their own insertion lines once built — everything from here down is
+     still the pre-CMS hardcoded `copy`, untouched by this ticket. -->
 
 {/* Team + Gallery (ticket #23) — reads apps/site/src/lib/team.ts +
     apps/site/src/lib/site-content.ts directly (staff table / gallery
