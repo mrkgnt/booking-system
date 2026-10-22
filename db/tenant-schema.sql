@@ -298,7 +298,48 @@ create table external_busy_blocks (
 );
 
 -- ============================================================================
--- 9. updated_at triggers
+-- 9. SITE CONTENT (CMS, ADR-0005)
+-- ============================================================================
+-- Schema-driven marketing-copy CMS for apps/site. Generic across every
+-- Tenant (not Dent-Di-specific), added here so a future Tenant's Site build
+-- gets this for free. Scope boundary: service_categories/services/staff/
+-- business_hours/business_profile stay the single source of truth for that
+-- data (apps/site reads them directly, the same way apps/widget's
+-- /public/tenant-info and apps/admin's existing screens already do) — this
+-- CMS covers only copy with no existing schema home (hero/about/stats/
+-- testimonial/value-props/gallery/quick-contact links).
+
+create table site_sections (
+  id uuid primary key default gen_random_uuid(),
+  page_slug text not null,
+  section_key text not null,
+  display_order int not null default 0,
+  -- [{ key, label, type: "text"|"textarea"|"image", required, localized }].
+  -- Developer-written: changes only when a Section is added/changed in
+  -- code. No Tenant-facing write path exists for this table at all.
+  fields jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (page_slug, section_key)
+);
+
+create table site_content (
+  id uuid primary key default gen_random_uuid(),
+  page_slug text not null,
+  locale text not null,
+  -- { [section_key]: { [field_key]: value } }. Tenant-editable, written
+  -- through apps/admin's Site Content screen. A field marked
+  -- localized: false in its site_sections definition is still only ever
+  -- written under one canonical locale row (the Tenant's default_locale)
+  -- and is read regardless of which locale the page is currently
+  -- rendering, rather than being duplicated into every locale's row.
+  content jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (page_slug, locale)
+);
+
+-- ============================================================================
+-- 10. updated_at triggers
 -- ============================================================================
 
 create or replace function set_updated_at()
@@ -320,9 +361,11 @@ create trigger trg_customers_updated_at before update on customers
   for each row execute function set_updated_at();
 create trigger trg_bookings_updated_at before update on bookings
   for each row execute function set_updated_at();
+create trigger trg_site_content_updated_at before update on site_content
+  for each row execute function set_updated_at();
 
 -- ============================================================================
--- 10. ROW LEVEL SECURITY
+-- 11. ROW LEVEL SECURITY
 -- ============================================================================
 -- Single-tenant per project now, so the check simplifies to "is this user an
 -- active member of THIS business" — no business_id parameter needed.
@@ -367,6 +410,8 @@ alter table notification_log enable row level security;
 alter table tenant_integrations enable row level security;
 alter table staff_calendar_connections enable row level security;
 alter table external_busy_blocks enable row level security;
+alter table site_sections enable row level security;
+alter table site_content enable row level security;
 
 -- Policies are explicitly scoped "to authenticated" — without this they'd
 -- default to PUBLIC (all roles, including anon), which would make Postgres
@@ -408,6 +453,10 @@ create policy "members access staff_calendar_connections" on staff_calendar_conn
   for all to authenticated using (is_active_member()) with check (is_active_member());
 create policy "members access external_busy_blocks" on external_busy_blocks
   for all to authenticated using (is_active_member()) with check (is_active_member());
+create policy "members access site_sections" on site_sections
+  for all to authenticated using (is_active_member()) with check (is_active_member());
+create policy "members access site_content" on site_content
+  for all to authenticated using (is_active_member()) with check (is_active_member());
 
 -- RLS enable + a "for all" policy is not, on its own, enough for an
 -- authenticated business member to reach a table — Postgres checks
@@ -431,9 +480,11 @@ grant select, insert, update, delete on notification_log to authenticated;
 grant select, insert, update, delete on tenant_integrations to authenticated;
 grant select, insert, update, delete on staff_calendar_connections to authenticated;
 grant select, insert, update, delete on external_busy_blocks to authenticated;
+grant select, insert, update, delete on site_sections to authenticated;
+grant select, insert, update, delete on site_content to authenticated;
 
 -- ============================================================================
--- 11. PUBLIC CATALOG READ ACCESS (anon)
+-- 12. PUBLIC CATALOG READ ACCESS (anon)
 -- ============================================================================
 -- The booking widget browses the catalog directly via Supabase REST rather
 -- than proxying reads through the backend API — nothing in these tables is
@@ -447,6 +498,10 @@ grant select on services to anon;
 grant select on staff to anon;
 grant select on business_hours to anon;
 grant select on translations to anon;
+-- apps/site reads Site Content directly (ADR-0005), the same way the rest
+-- of the public catalog is read — nothing in either table is sensitive.
+grant select on site_sections to anon;
+grant select on site_content to anon;
 
 -- Only active/published rows are public.
 create policy "public read active service_categories" on service_categories
@@ -456,6 +511,10 @@ create policy "public read active services" on services
 create policy "public read active bookable staff" on staff
   for select to anon using (is_active = true);
 create policy "public read business_hours" on business_hours
+  for select to anon using (true);
+create policy "public read site_sections" on site_sections
+  for select to anon using (true);
+create policy "public read site_content" on site_content
   for select to anon using (true);
 
 -- Scoped to known public-content entity types, so a future entity_type
