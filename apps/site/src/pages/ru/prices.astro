@@ -1,0 +1,9 @@
+---
+import SiteLayout from "@/layouts/SiteLayout.astro";
+import PricesContent from "@/components/PricesContent.astro";
+import { ru } from "@/content/ru";
+---
+
+<SiteLayout locale="ru" copy={ru} title={ru.nav.prices}>
+  <PricesContent copy={ru} />
+</SiteLayout>

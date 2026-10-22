@@ -1,0 +1,109 @@
+---
+import "../styles/global.css";
+import { Button } from "@/components/ui/button";
+import type { Locale, SiteCopy } from "@/content/types";
+import { getRelativeLocaleUrl } from "astro:i18n";
+
+interface Props {
+  locale: Locale;
+  copy: SiteCopy;
+  title: string;
+}
+
+const { locale, copy, title } = Astro.props;
+
+const localeLabels: Record<Locale, string> = { lv: "LV", ru: "RU", en: "EN" };
+const otherLocales = (["lv", "ru", "en"] as const).filter((l) => l !== locale);
+
+const widgetEmbedUrl = import.meta.env.WIDGET_EMBED_URL ?? "http://localhost:8082/embed.js";
+const tenantSlug = import.meta.env.TENANT_SLUG ?? "dentdi";
+---
+
+<html lang={locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} — Dent Di</title>
+    <meta
+      name="description"
+      content="Dent Di — stomatoloģijas klīnika Rīgā kopš 2003. gada. Dental clinic in Riga since 2003."
+    />
+  </head>
+  <body class="min-h-screen flex flex-col">
+    <header class="border-b border-border/70 bg-background/95 backdrop-blur sticky top-0 z-40">
+      <div class="mx-auto max-w-5xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        <a href={getRelativeLocaleUrl(locale, "/")} class="font-heading text-xl tracking-tight text-primary">
+          Dent Di
+        </a>
+        <nav class="hidden sm:flex items-center gap-6 text-sm text-foreground/80">
+          <a href={getRelativeLocaleUrl(locale, "/")} class="hover:text-primary transition-colors">
+            {copy.nav.home}
+          </a>
+          <a href={getRelativeLocaleUrl(locale, "/prices")} class="hover:text-primary transition-colors">
+            {copy.nav.prices}
+          </a>
+        </nav>
+        <div class="flex items-center gap-3">
+          <div class="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+            {otherLocales.map((l) => (
+              <a href={getRelativeLocaleUrl(l, Astro.url.pathname.replace(/^\/(ru|en)/, "") || "/")} class="hover:text-primary transition-colors">
+                {localeLabels[l]}
+              </a>
+            ))}
+          </div>
+          <Button data-platform-book size="sm">{copy.nav.bookNow}</Button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1">
+      <slot />
+    </main>
+
+    <footer class="border-t border-border/70 bg-secondary/40">
+      <div class="mx-auto max-w-5xl px-4 sm:px-6 py-10 grid gap-8 sm:grid-cols-3 text-sm">
+        <div>
+          <p class="font-heading text-lg text-primary mb-2">Dent Di</p>
+          <p class="text-muted-foreground">{copy.hero.since}</p>
+        </div>
+        <div>
+          <p class="font-medium mb-2">{copy.contact.heading}</p>
+          <p class="text-muted-foreground">
+            {copy.contact.addressLines.map((line) => <>{line}<br /></>)}
+          </p>
+          <p class="text-muted-foreground mt-1">
+            <a href={`tel:${copy.contact.phone.replace(/\s+/g, "")}`} class="hover:text-primary">{copy.contact.phone}</a>
+            {" · "}
+            <a href={`mailto:${copy.contact.email}`} class="hover:text-primary">{copy.contact.email}</a>
+          </p>
+        </div>
+        <div>
+          <p class="font-medium mb-2">{copy.hours.heading}</p>
+          <ul class="text-muted-foreground space-y-0.5">
+            {copy.hours.rows.slice(0, 2).map((row) => (
+              <li>{row.day}: {row.hours}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-border/70 py-4 text-center text-xs text-muted-foreground">
+        © {new Date().getFullYear()} Dent Di. {copy.footer.rights}
+      </div>
+    </footer>
+
+    <!--
+      Embeds the Booking Widget (apps/widget, ADR-0004) rather than
+      reimplementing booking-flow code. The default floating trigger is
+      opted out via data-hide-default-button since the nav/hero already
+      has a styled "Book Now" CTA (data-platform-book) for this Tenant.
+    -->
+    <script
+      is:inline
+      src={widgetEmbedUrl}
+      async
+      data-tenant={tenantSlug}
+      data-locale={locale}
+      data-hide-default-button
+    ></script>
+  </body>
+</html>

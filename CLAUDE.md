@@ -424,6 +424,51 @@ detail: see `PROJECT_CONTEXT.md`.
 | Booking Widget drawer reused for cancel/reschedule (`/to-tickets`, 2026-10-21) | Cancel and reschedule no longer get a separately-designed page — both render the same **Drawer** component (slide-in panel from the right, ~35vw desktop, dimmed backdrop, full-screen on mobile) the booking flow uses, reached via direct top-level navigation (no host page to embed an iframe into) rather than inside an iframe. Reschedule reuses the drawer's live availability-picker pre-filled with the existing booking; cancel reuses just the shared shell plus a booking-detail view. Amends ADR-0004's original "standalone (non-iframe) pages" phrasing. See ADR-0004, `GLOSSARY.md`'s **Drawer** term. |
 | `apps/widget` implementation complete, code-reviewed (2026-10-22) | All 11 tickets under issue #6 (apps/api endpoints, embed script, drawer shell, trigger hooks, failure UX, mobile layout, locale switcher, full booking flow, booking draft, reschedule, cancel) built, merged to the `widget-integration` branch, and closed. Two-axis code review (`/code-review`) run over the full branch before merge to `main`: **Spec axis** — high fidelity, no real findings (the one gap, #14's E2E happy path still self-skipping against the live inactive `dentdi` tenant, was already disclosed, not a defect). **Standards axis** — two real findings, handled as follows: (1) the entire booking-flow UI (service/availability/contact/confirm steps, cancel/reschedule pages) is hardcoded English, never routed through `apps/widget/src/lib/i18n/messages.ts` — **deferred, not fixed**, logged as its own Open Item below rather than scope-creeping a full i18n pass into a review-fixes commit; (2) `StandaloneDrawerLayout.astro` hand-rolled hex/rgba CSS instead of Tailwind design tokens — fixed directly. Judgement-call duplication smells (repeated fetch-wrapper shape across `apps/widget/src/lib/api/*.ts`, `resolveLocale`/`resolveLocaleString` reimplemented in two `apps/api` route files, 5 near-identical CORS blocks in `app.ts`) — the CORS block repetition was collapsed into a shared helper; the API-client and locale-resolution duplication were left as accepted debt (low payoff relative to the regression risk of refactoring already-tested code this late) and are also logged below. |
 
+- [ ] **`apps/site` scaffolded — Dent Di marketing site, "no thrills" pass**
+      (2026-10-22). Real content pulled directly from the live
+      `dentdi.lv` WordPress site (being decommissioned) rather than
+      invented: hero/about copy, the two team bios (Dr. Dina Gnitecka,
+      Olga Čursinova), hours, contact info, and a curated subset (3 real
+      items per category, real € prices) of the real 6-category price
+      list, all in LV + RU + EN — full item-by-item price-list fidelity
+      (~90 rows × 3 locales) was judged disproportionate to parse/
+      transcribe reliably for a pass explicitly scoped as "no thrills,
+      proper design later"; see the Open Items note below. Photos are
+      hotlinked from the live WordPress site's own uploads (same
+      approach this file already anticipated under "Real photography
+      sourcing"). Two pages (Home, Price List) × 3 locales via Astro's
+      built-in i18n routing (`lv` at `/`, `ru`/`en` prefixed, per the
+      existing "Locales at launch" decision). Embeds the Booking Widget
+      via `apps/widget`'s `embed.js` (`data-tenant="dentdi"`) rather
+      than reimplementing booking-flow code, per the existing "Build
+      sequencing (widget vs. site)" decision — verified end-to-end with
+      a real browser click: the nav/hero "Pieraksties" CTA (wired via
+      `data-platform-book`, default floating trigger opted out via
+      `data-hide-default-button` since this Tenant has its own styled
+      CTA) opens the real widget drawer iframe, correctly localized,
+      showing the widget's existing documented "temporarily unavailable"
+      fallback when `apps/api` isn't running — exactly the designed
+      failure UX, not a bug. Applies the already-decided sage/cream +
+      Georgia-serif-headings tokens (reserved for `apps/site` per the
+      "Back-office UI stack" row's own note), modernized relative to the
+      dated WordPress original (generous whitespace, rounded-xl cards,
+      Geist sans body text for contrast against serif headings) per an
+      explicit user ask mid-build. Stack: Astro + Tailwind v4 + shadcn/ui
+      (`Button` only so far, per the standing shadcn directive), `@astrojs/
+      react` wired but **no `client:*` directives used anywhere** — the
+      shadcn `Button` renders fully static (verified: the built output's
+      only `<script>` tag is the widget embed itself, zero hydration JS
+      shipped). **Output mode diverges from `apps/admin`/`apps/widget`:
+      static, not `output: "server"`** — a deliberate judgment call, not
+      silently made: this app has no per-request logic (no auth, no
+      per-request CSP header) that SSR's deployment complexity would
+      buy; revisit if a future page needs one. `astro check`/`tsc
+      --noEmit` clean, `astro build` clean (6 pages). Not yet committed;
+      `apps/site/.env.example` documents `WIDGET_EMBED_URL`/
+      `TENANT_SLUG`. Deferred, not done: full price-list fidelity, a
+      cases/before-after gallery page, favicon/OG image, SEO redirect
+      map from the old WordPress URLs (already an Open Item below).
+
 ## Open / Non-Blocking Items
 
 - **`apps/widget` booking-flow UI is hardcoded English, not localized**
@@ -451,7 +496,14 @@ detail: see `PROJECT_CONTEXT.md`.
   debt (found via code review, 2026-10-22) — a shared `apps/api/src/
   lib/` helper would be the fix, low priority at 2 call sites.
 - Content accuracy of demo pricing/staff/hours — needs client review.
+  **Partially addressed** by the `apps/site` scaffold above: real
+  hours/contact/team copy and a curated real-price subset (3 items ×
+  6 categories, not the full ~90-row list) are in place; still needs
+  the client's sign-off and, if wanted, the remaining price rows
+  transcribed in full.
 - Real photography sourcing (current images hotlinked from WordPress).
+  `apps/site`'s pass above does exactly this (hero + a 3-photo strip),
+  as anticipated — still a placeholder, not licensed/owned photography.
 - SEO redirect map from old WordPress URLs.
 - GDPR specifics beyond region: consent-checkbox copy, retention/purge
   policy for cancelled/old bookings.
