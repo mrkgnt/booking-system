@@ -2,6 +2,13 @@
 // Dent Di project (eafeskigfcinnwahjiyx). Do not hand-edit — regenerate
 // after any schema change (db/tenant-schema.sql or a live migration) by
 // re-running the same MCP call and overwriting this file.
+//
+// EXCEPTION (ticket #19, 2026-10-22): `site_content`/`site_sections` below
+// were hand-added to match db/tenant-schema.sql's ADR-0005 tables — the
+// Supabase MCP tools were unavailable this session and the live Dent Di
+// project doesn't have this migration applied yet (ticket #28's schema
+// isn't live). Regenerate this whole file via MCP once both are true, to
+// replace this hand-written block with the real generated one.
 export type Json =
   | string
   | number
@@ -578,6 +585,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      site_content: {
+        Row: {
+          content: Json
+          created_at: string
+          id: string
+          locale: string
+          page_slug: string
+          updated_at: string
+        }
+        Insert: {
+          content?: Json
+          created_at?: string
+          id?: string
+          locale: string
+          page_slug: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          id?: string
+          locale?: string
+          page_slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      site_sections: {
+        Row: {
+          created_at: string
+          display_order: number
+          fields: Json
+          id: string
+          page_slug: string
+          section_key: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          fields?: Json
+          id?: string
+          page_slug: string
+          section_key: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          fields?: Json
+          id?: string
+          page_slug?: string
+          section_key?: string
+        }
+        Relationships: []
       }
       staff: {
         Row: {
