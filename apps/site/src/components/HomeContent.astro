@@ -1,18 +1,35 @@
 ---
 import { Button } from "@/components/ui/button";
-import type { SiteCopy } from "@/content/types";
+import FindUs from "@/components/FindUs.astro";
+import QuickContact from "@/components/QuickContact.astro";
+import ValueProps from "@/components/ValueProps.astro";
+import type { Locale, SiteCopy } from "@/content/types";
+import { getBusinessAddress, getFieldValueByKey, getFirstFieldValueByType, getSiteContent, parseLines } from "@/lib/site-content";
 
 interface Props {
   copy: SiteCopy;
+  locale: Locale;
 }
 
-const { copy } = Astro.props;
+const { copy, locale } = Astro.props;
 
 const photoStrip = [
   "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__11-min-2048x1365.jpg",
   "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__24-min-2048x1365.jpg",
   "https://dentdi.lv/wp-content/uploads/2023/09/Dent_Di__6-min-2048x1365.jpg",
 ];
+
+// Site Content fetch for this ticket's 3 sections (issue #25: value-props
+// checklist, quick-contact card row, find-us band). Sibling tickets #22/#23
+// add their own sections (hero/about/stats/testimonial, team/gallery) to
+// this same page concurrently — if one of them lands a shared Site Content
+// read helper when this merges, this call should be swapped to reuse it
+// rather than keeping this one as a second, duplicate fetch.
+const siteContent = await getSiteContent("home", locale);
+const valuePropsItems = parseLines(getFirstFieldValueByType(siteContent, "value_props", "textarea"));
+const whatsappUrl = getFieldValueByKey(siteContent, "quick_contact", "whatsapp_url");
+const telegramUrl = getFieldValueByKey(siteContent, "quick_contact", "telegram_url");
+const address = await getBusinessAddress();
 ---
 
 <section class="relative overflow-hidden">
@@ -74,6 +91,8 @@ const photoStrip = [
   </div>
 </section>
 
+<ValueProps items={valuePropsItems} />
+
 <section class="mx-auto max-w-5xl px-4 sm:px-6 py-16 grid gap-10 sm:grid-cols-2">
   <div>
     <h2 class="text-2xl font-semibold text-primary mb-4">{copy.hours.heading}</h2>
@@ -102,9 +121,12 @@ const photoStrip = [
           {copy.contact.email}
         </a>
       </p>
+      <QuickContact whatsappUrl={whatsappUrl} telegramUrl={telegramUrl} />
       <Button data-platform-book variant="outline" className="mt-2">
         {copy.nav.bookNow}
       </Button>
     </div>
   </div>
 </section>
+
+<FindUs address={address} heading={copy.findUs.heading} mapsLabel={copy.findUs.mapsLabel} wazeLabel={copy.findUs.wazeLabel} />

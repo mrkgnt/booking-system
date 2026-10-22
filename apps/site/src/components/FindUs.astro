@@ -1,0 +1,47 @@
+---
+import { MapPinIcon, NavigationIcon } from "lucide-react";
+import { buildMapsUrl, buildWazeUrl } from "@/lib/find-us";
+
+// "Find us" band (issue #25) — Maps/Waze links are built here, at render
+// time, from the Tenant's existing business_profile.address (passed in as
+// a prop, fetched by the caller) rather than a Site Content field, so
+// there's exactly one source of truth for the address (issue #18's
+// decision). Renders nothing if the address isn't set.
+interface Props {
+  address: string | null;
+  heading: string;
+  mapsLabel: string;
+  wazeLabel: string;
+}
+
+const { address, heading, mapsLabel, wazeLabel } = Astro.props;
+---
+
+{address && (
+  <section class="mx-auto max-w-5xl px-4 sm:px-6 py-16">
+    <h2 class="text-2xl font-semibold text-primary mb-4">{heading}</h2>
+    <div class="rounded-2xl border border-border/70 bg-card p-6">
+      <p class="text-foreground/90 mb-5">{address}</p>
+      <div class="flex flex-wrap gap-3">
+        <a
+          href={buildMapsUrl(address)}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-teal-dark"
+        >
+          <MapPinIcon className="size-4" />
+          {mapsLabel}
+        </a>
+        <a
+          href={buildWazeUrl(address)}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-muted"
+        >
+          <NavigationIcon className="size-4" />
+          {wazeLabel}
+        </a>
+      </div>
+    </div>
+  </section>
+)}

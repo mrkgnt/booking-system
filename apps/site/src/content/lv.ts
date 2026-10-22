@@ -99,5 +99,10 @@ export const lv: SiteCopy = {
     ],
     note: "Precīzas izmaksas ārstēšanas plānam tiek noteiktas pēc individuālas konsultācijas.",
   },
-  footer: { rights: "Visas tiesības aizsargātas." },
+  footer: { rights: "Visas tiesības aizsargātas.", backToTop: "Uz augšu" },
+  findUs: {
+    heading: "Kā mūs atrast",
+    mapsLabel: "Atvērt Google Maps",
+    wazeLabel: "Braukt ar Waze",
+  },
 };

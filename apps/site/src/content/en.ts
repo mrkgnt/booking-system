@@ -98,5 +98,10 @@ export const en: SiteCopy = {
     ],
     note: "Exact treatment-plan pricing is confirmed after an individual consultation.",
   },
-  footer: { rights: "All rights reserved." },
+  footer: { rights: "All rights reserved.", backToTop: "Back to top" },
+  findUs: {
+    heading: "Find us",
+    mapsLabel: "Open Google Maps",
+    wazeLabel: "Drive with Waze",
+  },
 };
