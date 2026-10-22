@@ -502,6 +502,12 @@ grant select on translations to anon;
 -- of the public catalog is read — nothing in either table is sensitive.
 grant select on site_sections to anon;
 grant select on site_content to anon;
+-- apps/site's "find us" band (issue #25) needs business_profile.address —
+-- column-scoped, not a whole-table grant, since business_profile also
+-- holds site_config/theme_tokens/status which aren't meant to be public.
+-- Keeps apps/site anon-key-only like every other read it does, rather
+-- than handing it the service-role key for just this one field.
+grant select (address) on business_profile to anon;
 
 -- Only active/published rows are public.
 create policy "public read active service_categories" on service_categories
@@ -515,6 +521,8 @@ create policy "public read business_hours" on business_hours
 create policy "public read site_sections" on site_sections
   for select to anon using (true);
 create policy "public read site_content" on site_content
+  for select to anon using (true);
+create policy "public read business_profile address" on business_profile
   for select to anon using (true);
 
 -- Scoped to known public-content entity types, so a future entity_type
